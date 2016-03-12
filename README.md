@@ -1,34 +1,95 @@
 # syringe
 
-Syringe is a [lazy]&nbsp;[dependency injector] for [Go].
+Syringe is a fast, easy to use, and [lazy]&nbsp;[dependency injector] for [Go].
 
-It's key feature is lazy, concurrent initialisation of dependency graphs. It can be used to implement the [inversion of control (IoC) pattern], but its primary focus is to speed up initialisation, epecially for command line applications.
+It's key features are:
 
-```go
-syringe.Fill(NewDependency, "hello, cruel world", NewThing, NewSomthingElse, io.Writer(os.Stdout))
+- Automatic concurrent initialisation of dependency graphs.
+- A very simple API, just 2 calls are needed for most apps: `syringe.Fill()` and `syringe.Inject()`
+- No tags, keep your code clean and readable.
+- No named instances. Instead, uses named types.
+- Lazy initialisation, don't create anything which isn't needed.
+- It can be used to implement the [inversion of control (IoC) pattern]
+- Suitable for both short and long-running apps (e.g. CLIs and web servers)
 
-dependentObject := SomethingWithDependencies{}
-
-syringe.Inject(&dependentObject) // now your object is ready to use
-```
+See a [simple usage example], below.
 
 [lazy]: https://en.wikipedia.org/wiki/Lazy_initialization
 [dependency injector]: https://en.wikipedia.org/wiki/Dependency_injection
 [Go]: https://golang.org
 [inversion of control (IoC) pattern]: https://en.wikipedia.org/wiki/Inversion_of_control 
+[simple usage example]: #simple-usage-example
 
 ## Usage
 
-You fill up your syringe by passing a mixture of constructors and fully realised objects. Constructors are functions taking any number of arguments of any kind, and returning either a single value (the constructor's [injection type]), or that value plus an `error`. Fully realised objects are objects of any type.
+Call `syringe.Fill(...)` to add objects and constructors to the syringe. Then, call syringe.Inject(...)` to inject those objects into other objects which need them.
 
-Once your syringe contains the necessary objects and constructors to build your object graph, you call `syringe.Inject` to inject these dependencies into whichever object needs populating with objects in the graph. These dependencies are resolved recursively, and in parallel where the structure allows.
+### Simple Usage Example
+
+```go
+package syringe_test
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/samsalisbury/syringe"
+)
+
+type (
+	Command struct {
+		User Username
+		Host Hostname
+		Load LoadAverage
+	}
+	Username    string
+	Hostname    string
+	LoadAverage float64
+)
+
+func NewUsername() Username       { return "bob" }
+func NewHostname() Hostname       { return Hostname("localhost") }
+func NewLoadAverage() LoadAverage { return 0.83 }
+
+func (c Command) Print() {
+	fmt.Printf("User: %s, Host: %s, Load average: %.2f", c.User, c.Host, c.Load)
+}
+
+func ExampleSyringe_Simple() {
+	s := syringe.Syringe{}
+	_, err := s.Fill(NewUsername, NewHostname, NewLoadAverage)
+	if err != nil {
+		log.Fatal(err)
+	}
+	command := Command{}
+	s.Inject(&command)
+	command.Print()
+	// output:
+	// User: bob, Host: localhost, Load average: 0.83
+}
+```
+
+### How does it work?
+
+Each item you pass into `.Fill()` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is consitered to be a _fully realised object,_ and its own type is used as its injection type. Your syringe knows how to inject objects of each registered injection type.
+
+When you call `.Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the syringe. For constructors, it will call that constructor exactly once to generate its object, if needed. For fully realised objects, it will simply inject that object when called to.
+
+Each parameter in a constructor will need to also be available in the syringe, in order for that constructor to be successfully invoked. If not, `.Inject` will return an error.
+
+Likewise, if the constructor is successfully invoked, but return a non-nil error as its second return value, then `.Inject` will return the first such error encountered.
 
 [injection type]: #injection-types
+[constructor]: #constructors
 
-### _Syringe is unflexible in some regards:_
 
-- **No named objects:** You can only have one constructor or fully realised object of a given [injection type] per syringe.
-- **No scopes:** All objects in a syringe are singletons, and are created exactly once, if at all.
+### Syringe is inflexible in some regards:
+
+- **No named objects:** You can only have one constructor or fully realised object of a given [injection type] per syringe. Instead, [you use named types] to differentiate objects.
+- **No scopes:** All objects in a syringe are singletons, and are created exactly once, if at all. However, you can [use multiple syringes] and `Clone()` to create your own scopes easily.
+
+[you can use named types]: #no-named-objects
+[use multiple syringes]: #no-scopes
 
 #### No Named Objects
 
@@ -43,14 +104,14 @@ type SomeExpensiveToCalculateString string
 
 #### No Scopes
 
-The second of these issues, "no scoping," is also easily mitigated by using multiple syringes. For example, you could create a new syringe for each HTTP request, if you need request-scoped dependency injection. This is made computationally cheaper by using compiled syringes using `syringe.Compile()`.
+The second of these issues, "no scoping," is also easily mitigated by using multiple syringes. For example, you could create a new syringe for each HTTP request, if you need request-scoped dependency injection. This can be made computationally cheaper by simply cloning a pre-made syringe for each request.
 
 ```go
 var appScopedSyringe, requestScopedSyringe syringe.Syringe
 
 func main() {
 	appScopedSyringe = syringe.New().Fill(NewApplicationScopedThing, Newfoundland)
-	requestSyringe = syringe.New().Fill(NewRequestScopedThing, NewThingamabob).MustCompile()
+	requestSyringe = syringe.New().Fill(NewRequestScopedThing, NewThingamabob)
 	http.HandleFunc("/", HandleHTTPRequest)
 	http.ListenAndServe(":8080")
 }
@@ -96,7 +157,7 @@ import (
 	"fmt"
 	"io"
 
-	"gopkg.in/syringe.v1"
+	"github.com/samsalisbury/syringe"
 )
 
 type HostName string
@@ -131,59 +192,27 @@ func main() {
 // func() (interface{}, interface{})
 ```
 
-### simple example
+## Constructors
+
+Constructors can take 2 different forms:
+
+1. `func (...Anything) Anything`
+2. `func (...Anything) (Anything, error)`
+
+Just to clarify: `Anything` means literally any type, and in the signatures above can heave a different value each time it is seen. For example, all of the following types are considered to be constructors:
+
+- func() int
+- func() (int, error)
+- func(int) int
+- func(int) (int, error) 
+- func (string, io.Reader, io.Writer) interface{}
+- func (string, io.Reader, io.Writer) (interface{}, error)
+
+If you need to inject a fully-realised object which matches a constructor's signature, you'll need to create a function that returns that object. For example, for an object with injection type `func(int) (int, error)`, you would need to create a func to return that:
 
 ```go
-package main
-
-import (
-	"log"
-	"math/rand"
-	"time"
-
-	"gopkg.in/syringe.v1"
-)
-
-type (
-	SomeHeavyDependency        interface{}
-	SlowDependency             interface{}
-	HorriblySluggishDependency interface{}
-	SomeSingleton              struct{}
-
-	UserFacingCommand struct {
-		Heavy     SomeHeavyDependency
-		Slow      SlowDependency
-		Horrible  HorriblySluggishDependency	
-		Singleton SomeSingleton
-	}
-)
-
-func main() {
-
-	eagerSingleton := SomeSingleton{}
-
-	syringe.Fill(NewHeavyDependency, NewSlowDependency, NewHorriblySluggishDependency, eagerSingleton)
-	
-	// user instigates UserFacingCommand...
-
-	command := UserFacingCommand{}
-
-	if err := syringe.Inject(&command); err !=  nil { // blocks until all known dependencies are resolved
-		log.Fatal(err)
-	}
-
-	command.Execute()
+newFunc() func(int) (int, error) {
+	return func(int) (int, error) { return 0, nil }
 }
-
-func doWork() interface{} {
-	time.Sleep(rand.Intn(500)*time.Millisecond)
-	return nil
-}
-
-func NewHeavyDependency()            SomeHeavyDependency        { return doWork() }
-func NewSlowDependency()             (SlowDependency, error)    { return doWork() }
-func NewHorriblySluggishDependency() HorriblySluggishDependency { return doWork() }
-
-func (ufc UserFacingCommand) Execute() { log.Println("Hello, dear user! I came as quickly as I could!") }
-
 ```
+
