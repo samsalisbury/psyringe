@@ -33,6 +33,10 @@ var (
 	terror         = reflect.TypeOf((*error)(nil)).Elem()
 )
 
+func New() *Syringe {
+	return &Syringe{}
+}
+
 func (s *Syringe) init() *Syringe {
 	if s.objects != nil {
 		return s
