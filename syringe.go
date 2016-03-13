@@ -12,7 +12,7 @@ type (
 		Println(...interface{})
 	}
 	Syringe struct {
-		objects        map[reflect.Type]reflect.Value
+		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
 		injectionTypes map[reflect.Type]struct{}
 		ctorMutex      sync.Mutex
@@ -26,12 +26,12 @@ type (
 		once      sync.Once
 		value     *reflect.Value
 	}
-	noConstructorOrObject struct {
+	noConstructorOrValue struct {
 		ForType reflect.Type
 	}
 )
 
-func (e noConstructorOrObject) Error() string {
+func (e noConstructorOrValue) Error() string {
 	return fmt.Sprintf("no constructor or value for %s", e.ForType)
 }
 
@@ -45,10 +45,10 @@ func New() *Syringe {
 }
 
 func (s *Syringe) init() *Syringe {
-	if s.objects != nil {
+	if s.values != nil {
 		return s
 	}
-	s.objects = map[reflect.Type]reflect.Value{}
+	s.values = map[reflect.Type]reflect.Value{}
 	s.ctors = map[reflect.Type]*ctor{}
 	s.injectionTypes = map[reflect.Type]struct{}{}
 	return s
@@ -91,7 +91,7 @@ func (s *Syringe) DebugFunc(f func(string)) {
 // for that field's type. All targets, and all fields in each target, are resolved
 // concurrently.
 func (s *Syringe) Inject(targets ...interface{}) error {
-	if s.objects == nil {
+	if s.values == nil {
 		return fmt.Errorf("Inject called before Fill")
 	}
 	wg := sync.WaitGroup{}
@@ -145,7 +145,7 @@ func (s Syringe) inject(target interface{}) error {
 			if err == nil {
 				f.Set(fv)
 				s.debugf("Inject: populated %s.%s with %v", t, fieldName, fv)
-			} else if _, ok := err.(noConstructorOrObject); ok {
+			} else if _, ok := err.(noConstructorOrValue); ok {
 				s.debugf("Inject: not populating %s.%s: %s", t, fieldName, err)
 			} else {
 				errs <- err
@@ -165,7 +165,7 @@ func (s *Syringe) add(thing interface{}) error {
 		err = s.addCtor(c)
 	} else {
 		what = "fully realised value"
-		err = s.addObject(t, v)
+		err = s.addValue(t, v)
 	}
 	if err != nil {
 		s.debugf("Fill: error adding %s (%T): %s", what, thing, err)
@@ -176,12 +176,12 @@ func (s *Syringe) add(thing interface{}) error {
 }
 
 func (s *Syringe) getValue(t reflect.Type) (reflect.Value, error) {
-	if v, ok := s.objects[t]; ok {
+	if v, ok := s.values[t]; ok {
 		return v, nil
 	}
 	c, ok := s.ctors[t]
 	if !ok {
-		return reflect.Value{}, noConstructorOrObject{t}
+		return reflect.Value{}, noConstructorOrValue{t}
 	}
 	return c.getValue(s)
 }
@@ -269,11 +269,11 @@ func (s *Syringe) addCtor(c *ctor) error {
 	return nil
 }
 
-func (s *Syringe) addObject(t reflect.Type, v reflect.Value) error {
+func (s *Syringe) addValue(t reflect.Type, v reflect.Value) error {
 	if err := s.registerInjectionType(t); err != nil {
 		return err
 	}
-	s.objects[t] = v
+	s.values[t] = v
 	return nil
 }
 
