@@ -3,6 +3,8 @@ package syringe_test
 import (
 	"bytes"
 	"fmt"
+	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/samsalisbury/syringe"
@@ -111,5 +113,106 @@ func TestInject_CustomErrors(t *testing.T) {
 
 	if actual != expected {
 		t.Errorf("got error %s; want %q", actual, expected)
+	}
+}
+
+type dependsOnDependent struct {
+	Dependency dependent
+}
+
+func TestInject_DependencyTree(t *testing.T) {
+	var (
+		// We want to monitor that each constructor is only called
+		// once. Since we know the tree is resolved concurrently where
+		// possible, we need to syncronise the counters...
+		newDependentCounter,
+		newStringCounter,
+		newIntCounter,
+		newBufferCounter uint64
+
+		// Also monitor the reference to buffer that each constructor sees
+		newDependentBuffer,
+		newStringBuffer,
+		newIntBuffer,
+		originalBuffer *bytes.Buffer
+	)
+
+	// Here are 4 constructors. Notice how all but newBuffer take
+	// a buffer as an argument. This means we can test that only
+	// one buffer is ever created, even though it is a dependency
+	// of many nodes in the tree.
+	//
+	// Each constructor atomically increments its call counter, and
+	// makes a note of the buffer reference it was passed.
+	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
+		atomic.AddUint64(&newDependentCounter, 1)
+		newDependentBuffer = b
+		return dependent{
+			Int:    i,
+			String: s,
+			Buffer: b,
+		}
+	}
+	newString := func(i int, b *bytes.Buffer) string {
+		atomic.AddUint64(&newStringCounter, 1)
+		newStringBuffer = b
+		return strings.Repeat(b.String(), i)
+	}
+	newInt := func(b *bytes.Buffer) int {
+		atomic.AddUint64(&newIntCounter, 1)
+		newIntBuffer = b
+		return b.Len()
+	}
+	newBuffer := func() *bytes.Buffer {
+		atomic.AddUint64(&newBufferCounter, 1)
+		originalBuffer = bytes.NewBuffer([]byte("yes"))
+		return originalBuffer
+	}
+
+	s := syringe.New()
+	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
+		t.Fatal(err)
+	}
+
+	d := dependsOnDependent{}
+
+	if err := s.Inject(&d); err != nil {
+		t.Fatal(err)
+	}
+
+	// Assert values are correct in final graph
+	if d.Dependency.Int != 3 {
+		fmt.Errorf("int not injected correctly")
+	}
+	if d.Dependency.Buffer.String() != "yes" {
+		fmt.Errorf("buffer not injected correctly")
+	}
+	if d.Dependency.String != "yesyesyes" {
+		fmt.Errorf("string not injected correctly")
+	}
+
+	// Assert that each constructor was called exactly once
+	if newDependentCounter != 1 {
+		t.Errorf("newDependent was executed %d times; expected 1", newDependentCounter)
+	}
+	if newStringCounter != 1 {
+		t.Errorf("newString was executed %d times; expected 1", newStringCounter)
+	}
+	if newIntCounter != 1 {
+		t.Errorf("newInt was executed %d times; expected 1", newIntCounter)
+	}
+	if newBufferCounter != 1 {
+		t.Errorf("newBuffer was executed %d times; expected 1", newBufferCounter)
+	}
+
+	// Assert that each instance of buffer is exactly the same.
+	if newDependentBuffer != originalBuffer {
+		t.Errorf("newDependent did not receive the original buffer")
+	}
+	if newStringBuffer != originalBuffer {
+		t.Errorf("newString did not receice the original buffer")
+	}
+	if newIntBuffer != originalBuffer {
+		t.Errorf("newInt did not receive the original buffer")
 	}
 }
