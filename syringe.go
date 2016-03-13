@@ -22,11 +22,18 @@ type (
 		outType   reflect.Type
 		inTypes   []reflect.Type
 		construct func(in []reflect.Value) (reflect.Value, error)
-		errorChan chan error
+		errChan   chan error
 		once      sync.Once
 		value     *reflect.Value
 	}
+	noConstructorOrObject struct {
+		ForType reflect.Type
+	}
 )
+
+func (e noConstructorOrObject) Error() string {
+	return fmt.Sprintf("no constructor or object for %s", e.ForType)
+}
 
 var (
 	DefaultSyringe = &Syringe{}
@@ -86,22 +93,22 @@ func (s *Syringe) Inject(targets ...interface{}) error {
 	}
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))
-	errs := []error{}
+	errs := make(chan error)
+	go func() {
+		wg.Wait()
+		close(errs)
+	}()
 	for _, t := range targets {
 		go func(target interface{}) {
 			defer wg.Done()
 			if err := s.inject(target); err != nil {
 				s.debugf("error injecting into %T: %s", target, err)
-				errs = append(errs, err)
+				errs <- err
 			}
 			s.debugf("finished injecting into %T", target)
 		}(t)
 	}
-	wg.Wait()
-	if len(errs) != 0 {
-		return errs[0]
-	}
-	return nil
+	return <-errs
 }
 
 // inject just tries to inject a value for each field, no errors if it
@@ -123,6 +130,11 @@ func (s Syringe) inject(target interface{}) error {
 	nfs := t.NumField()
 	wg := sync.WaitGroup{}
 	wg.Add(nfs)
+	errs := make(chan error)
+	go func() {
+		wg.Wait()
+		close(errs)
+	}()
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, fieldName string) {
 			defer wg.Done()
@@ -130,13 +142,14 @@ func (s Syringe) inject(target interface{}) error {
 			if err == nil {
 				f.Set(fv)
 				s.debugf("Inject: populated %s.%s with %v", t, fieldName, fv)
-			} else {
+			} else if _, ok := err.(noConstructorOrObject); ok {
 				s.debugf("Inject: not populating %s.%s: %s", t, fieldName, err)
+			} else {
+				errs <- err
 			}
 		}(v.Elem().Field(i), t.Field(i).Name)
 	}
-	wg.Wait()
-	return nil
+	return <-errs
 }
 
 func (s *Syringe) add(thing interface{}) error {
@@ -168,7 +181,7 @@ func (s *Syringe) getValue(t reflect.Type) (reflect.Value, error) {
 	}
 	c, ok := s.ctors[t]
 	if !ok {
-		return reflect.Value{}, fmt.Errorf("no constructor for %s", t)
+		return reflect.Value{}, noConstructorOrObject{t}
 	}
 	return c.getValue(s)
 }
@@ -199,7 +212,7 @@ func (s *Syringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 		outType:   outType,
 		inTypes:   inTypes,
 		construct: construct,
-		errorChan: make(chan error),
+		errChan:   make(chan error),
 	}
 }
 
@@ -207,7 +220,8 @@ func (c *ctor) getValue(s *Syringe) (reflect.Value, error) {
 	if c.value != nil {
 		return *c.value, nil
 	}
-	c.once.Do(func() {
+	go c.once.Do(func() {
+		defer close(c.errChan)
 		wg := sync.WaitGroup{}
 		numArgs := len(c.inTypes)
 		wg.Add(numArgs)
@@ -218,7 +232,7 @@ func (c *ctor) getValue(s *Syringe) (reflect.Value, error) {
 				defer wg.Done()
 				v, err := s.getValue(t)
 				if err != nil {
-					c.errorChan <- err
+					c.errChan <- err
 				}
 				args[i] = v
 			}()
@@ -226,12 +240,11 @@ func (c *ctor) getValue(s *Syringe) (reflect.Value, error) {
 		wg.Wait()
 		v, err := c.construct(args)
 		if err != nil {
-			c.errorChan <- err
+			c.errChan <- err
 		}
 		c.value = &v
-		close(c.errorChan)
 	})
-	if err := <-c.errorChan; err != nil {
+	if err := <-c.errChan; err != nil {
 		return reflect.Value{}, err
 	}
 	return *c.value, nil
