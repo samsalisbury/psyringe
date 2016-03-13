@@ -1,24 +1,66 @@
 # syringe
 
-Syringe is a fast, easy to use, and [lazy]&nbsp;[dependency injector] for [Go].
+Syringe is a fast, [lazy], easy to use [dependency injector] for [Go].
 
-It's key features are:
-
-- Automatic concurrent initialisation of dependency graphs.
-- A very simple API, just 2 calls are needed for most apps: `syringe.Fill()` and `syringe.Inject()`
-- No tags, keep your code clean and readable.
-- No named instances. Instead, uses named types.
-- Lazy initialisation, don't create anything which isn't needed.
-- It can be used to implement the [inversion of control (IoC) pattern]
-- Suitable for both short and long-running apps (e.g. CLIs and web servers)
+```go
+syringe.Fill(ObjectsAndConstructors...)
+target := SomeThing{}
+syringe.Inject(&target)
+```
 
 See a [simple usage example], below.
 
 [lazy]: https://en.wikipedia.org/wiki/Lazy_initialization
 [dependency injector]: https://en.wikipedia.org/wiki/Dependency_injection
 [Go]: https://golang.org
-[inversion of control (IoC) pattern]: https://en.wikipedia.org/wiki/Inversion_of_control 
 [simple usage example]: #simple-usage-example
+
+## Features
+
+- **[Concurrent, lazy initialisation]:** with no extra work on your part.
+- **[No tags]:** keep your code clean and readable.
+- **[Simple API]:** usually only need two calls: `syringe.Fill()` and `syringe.Inject()`
+- **[Supports advanced use cases]:** e.g. [scopes], [named instances], [debugging]
+
+[Concurrent, lazy initialisation]: #concurrent-and-lazy
+[No tags]: #no-tags
+[Simple API]: #simple-api
+[Supports advanced use cases]: #advanced-uses
+
+[scopes]: #scopes
+[named instances]: #named-instances
+[debugging]: #debugging
+
+### Concurrent and lazy
+
+Object graphs are populated recursively, and concurrently where the structure allows. For example, in the following code, both `NewRay` and `NewComb` will be run simultaneously when running `syringe.Inject` since neither depends on the other. However `NewWhat` will not be run, since `NeedsWidget` does not have a `What` field.
+
+```go
+func NewRay() RayMachine             { return &RayMachine{} }
+func NewComb() Combinator            { return &Combinator{} }
+func NewWhat() What                  { panic("this won't be called") }
+func NewWidget(x Ray, y Comb) Widget { return &Widget{x, y} }
+
+type NeedsWidget struct { Widget Widget }
+
+syringe.Fill(NewRay, NewComb, NewWidget)
+nw := NeedsWidget{}
+syringe.Inject(&nw)
+```
+
+### No Tags
+
+Unlike most dependency injectors for Go, this one does not require you to litter your structs with tags. Instead, it relies on well-written Go code to perform injection based solely on the types of your struct fields.
+
+### Simple API
+
+Syringe follows through on its metaphor. You `Fill` the syringe with things, then you `Inject` them into other things. Syringe does not try to provide any other features, but instead makes it easy to implement more advanced features like dependency scoping yourself. For example, you can create multiple syringes and have all of them inject different dependencies into the same object.
+
+### Advanced Uses
+
+Although the API is simple, and doesn't explicitly support scopes or named instances, these things are trivial to implement yourself. For example, scopes can be created by using multiple syringes, one at application level, and another within a http request, for example. See a complete example HTTP server using multiple scopes, below.
+
+Likewise, named instances (i.e. multiple different instances of the same type) can be created by aliasing the type name.
 
 ## Usage
 
@@ -57,8 +99,7 @@ func (c Command) Print() {
 
 func ExampleSyringe_Simple() {
 	s := syringe.Syringe{}
-	_, err := s.Fill(NewUsername, NewHostname, NewLoadAverage)
-	if err != nil {
+	if err := s.Fill(NewUsername, NewHostname, NewLoadAverage); err != nil {
 		log.Fatal(err)
 	}
 	command := Command{}
@@ -67,51 +108,51 @@ func ExampleSyringe_Simple() {
 	// output:
 	// User: bob, Host: localhost, Load average: 0.83
 }
+
 ```
 
-### How does it work?
+### Advanced usage
 
-Each item you pass into `.Fill()` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is consitered to be a _fully realised object,_ and its own type is used as its injection type. Your syringe knows how to inject objects of each registered injection type.
+- **[Named instances]**: You can only have one constructor or fully realised object of a given [injection type] per syringe. However, [you can use named types] to differentiate objects. This has the side benefit of making code more readable.
+- **[Scopes]**: All objects in a syringe are singletons, and are created exactly once, if at all. However, you can [use multiple syringes] to create your own scopes easily, and use `Clone()` to avoid paying the small initialisation cost of the syringe itself more than once.
 
-When you call `.Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the syringe. For constructors, it will call that constructor exactly once to generate its object, if needed. For fully realised objects, it will simply inject that object when called to.
+[you can use named types]: #named-instances
+[use multiple syringes]: #scopes
 
-Each parameter in a constructor will need to also be available in the syringe, in order for that constructor to be successfully invoked. If not, `.Inject` will return an error.
+#### Named Instances
 
-Likewise, if the constructor is successfully invoked, but return a non-nil error as its second return value, then `.Inject` will return the first such error encountered.
-
-[injection type]: #injection-types
-[constructor]: #constructors
-
-
-### Syringe is inflexible in some regards:
-
-- **No named objects:** You can only have one constructor or fully realised object of a given [injection type] per syringe. Instead, [you use named types] to differentiate objects.
-- **No scopes:** All objects in a syringe are singletons, and are created exactly once, if at all. However, you can [use multiple syringes] and `Clone()` to create your own scopes easily.
-
-[you can use named types]: #no-named-objects
-[use multiple syringes]: #no-scopes
-
-#### No Named Objects
-
-The first of these issues, "no named objects," is mitigated by using [named types], which also makes your code more precise and readable. For example, if you need to inject some strings, you can do the following, to differentiate them:
+Sometimes, you may need to inject more than one object of the same type. For example, the following struct needs 2 strings, `Name` and `Desc`:
 
 ```go
-type HostName                       string
-type SomeExpensiveToCalculateString string
+type Something struct { Name, Desc string }
 ```
+
+As it stands, syringe would be unable to inject `Name` and `Desc` with different values, since a syringe can only inject a single value of each type, and they are both `string`. However, by using an under-used feature of Go, [named types], it is possible to inject different values:
+
+```go
+type Something struct {
+	Name Name
+	Desc Description
+}
+
+type Name string
+type Desc string
+```
+
+Using these named types can also improve the readability of your code in many cases.
 
 [named types]: https://golang.org/ref/spec#Types
 
-#### No Scopes
+#### Scopes
 
-The second of these issues, "no scoping," is also easily mitigated by using multiple syringes. For example, you could create a new syringe for each HTTP request, if you need request-scoped dependency injection. This can be made computationally cheaper by simply cloning a pre-made syringe for each request.
+If you need objects with different scopes (a.k.a. lifetimes), then you can use multiple syringes, one for each scope. This allows you to preciesly control object lifetimes using normal Go code. There is one method added to support this use case: `Clone()`. The main use of `Clone` is to generate a fresh syringe based on the constructors and fully realised objects of one you've already defined. This is computationally cheaper than filling a blank syringe from scratch. See this example HTTP server below:
 
 ```go
 var appScopedSyringe, requestScopedSyringe syringe.Syringe
 
 func main() {
-	appScopedSyringe = syringe.New().Fill(NewApplicationScopedThing, Newfoundland)
-	requestSyringe = syringe.New().Fill(NewRequestScopedThing, NewThingamabob)
+	appScopedSyringe = syringe.New().Fill(ApplicationScopedThings...)
+	requestSyringe = syringe.New().Fill(RequestScopedThings...)
 	http.HandleFunc("/", HandleHTTPRequest)
 	http.ListenAndServe(":8080")
 }
@@ -134,16 +175,33 @@ func HandleHTTPRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	// Then inject request-scoped things... Later injections beat earlier
 	// ones, in case both syringes inject the same type.
+	// Note the use of Clone() here. That is important, as once you call
+	// Inject on a syringe, it uses up all its constructors, and replaces
+	// them with pre-made objects.
 	if err := requestSyringe.Clone().Inject(&controller); err != nil {
 		w.WriterHeader(500)
-		fmt.Fprintf(w, "Error: %s", err)
+		fmt.Fprintf(w, "Error injecting request-scoped objects: %s", err)
 		return
 	}
 	controller.HandleRequest(w, r)
 }
 ```
 
-### Injection Types
+### How does it work?
+
+Each item you pass into `.Fill()` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is considered to be a _fully realised object,_ and its own type is used as its injection type. Your syringe knows how to inject objects of each registered injection type.
+
+When you call `.Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the syringe. For constructors, it will call that constructor exactly once to generate its object, if needed. For fully realised objects, it will simply inject that object when called to.
+
+Each parameter in a constructor will need to also be available in the syringe, in order for that constructor to be successfully invoked. If not, `.Inject` will return an error.
+
+Likewise, if the constructor is successfully invoked, but returns a non-nil error as its second return value, then `.Inject` will return the first such error encountered.
+
+[injection type]: #injection-types
+[constructor]: #constructors
+
+
+#### Injection Types
 
 Fully realised objects and constructors passed into a syringe have an implicit **_injection type_** which is the type of object that object or constructor represents, or can create, in the graph. For fully realised objects, the injection type is the type of the variable passed into the syringe. For constructors, it is the type of the first output (return) value. It is important to understand this concept, since a single syringe can have only one object or constructor per injection type.
 
@@ -192,7 +250,7 @@ func main() {
 // func() (interface{}, interface{})
 ```
 
-## Constructors
+#### Constructors
 
 Constructors can take 2 different forms:
 
