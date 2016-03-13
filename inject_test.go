@@ -216,3 +216,42 @@ func TestInject_DependencyTree(t *testing.T) {
 		t.Errorf("newInt did not receive the original buffer")
 	}
 }
+
+func TestInject_DependencyTree_Errors(t *testing.T) {
+	// Here are 4 constructors. One of them returns an error...
+	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
+		return dependent{
+			Int:    i,
+			String: s,
+			Buffer: b,
+		}
+	}
+	newString := func(i int, b *bytes.Buffer) (string, error) {
+		return "", fmt.Errorf("error from newString")
+	}
+	newInt := func(b *bytes.Buffer) int {
+		return b.Len()
+	}
+	newBuffer := func() *bytes.Buffer {
+		return bytes.NewBuffer([]byte("yes"))
+	}
+
+	s := syringe.New()
+	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
+		t.Fatal(err)
+	}
+
+	d := dependsOnDependent{}
+
+	err := s.Inject(&d)
+	if err == nil {
+		t.Fatalf("expected an error from newString")
+	}
+
+	actual := err.Error()
+	expected := "error from newString"
+
+	if actual != expected {
+		t.Fatalf("got %q; want %q", actual, expected)
+	}
+}

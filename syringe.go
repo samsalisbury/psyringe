@@ -32,7 +32,7 @@ type (
 )
 
 func (e noConstructorOrObject) Error() string {
-	return fmt.Sprintf("no constructor or object for %s", e.ForType)
+	return fmt.Sprintf("no constructor or value for %s", e.ForType)
 }
 
 var (
@@ -57,12 +57,15 @@ func (s *Syringe) init() *Syringe {
 func Fill(things ...interface{}) error    { return DefaultSyringe.Fill(things...) }
 func Inject(targets ...interface{}) error { return DefaultSyringe.Inject(targets...) }
 
-// Fill fills the syringe with objects and constructors. Any function that returns a
+// Fill fills the syringe with values and constructors. Any function that returns a
 // single value, or two return values, the second of which is an error, is considered
-// to be a constructor. Everything else is considered to be a fully realised object.
+// to be a constructor. Everything else is considered to be a fully realised value.
 func (s *Syringe) Fill(things ...interface{}) error {
 	s.init()
 	for _, thing := range things {
+		if thing == nil {
+			return fmt.Errorf("Fill requires non-nil items")
+		}
 		if err := s.add(thing); err != nil {
 			return err
 		}
@@ -154,9 +157,6 @@ func (s Syringe) inject(target interface{}) error {
 
 func (s *Syringe) add(thing interface{}) error {
 	v := reflect.ValueOf(thing)
-	if v.Kind() == reflect.Ptr && v.IsNil() {
-		return fmt.Errorf("thing was nil")
-	}
 	t := v.Type()
 	var err error
 	var what string
@@ -164,7 +164,7 @@ func (s *Syringe) add(thing interface{}) error {
 		what = "constructor for " + c.outType.Name()
 		err = s.addCtor(c)
 	} else {
-		what = "fully realised object"
+		what = "fully realised value"
 		err = s.addObject(t, v)
 	}
 	if err != nil {
@@ -187,8 +187,14 @@ func (s *Syringe) getValue(t reflect.Type) (reflect.Value, error) {
 }
 
 func (s *Syringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
-	if t.Kind() != reflect.Func {
+	if t.Kind() != reflect.Func || t.IsVariadic() {
 		return nil
+	}
+	if v.IsNil() {
+		panic("syringe internal error: tryMakeCtor received a nil value")
+	}
+	if !v.IsValid() {
+		panic("syringe internal error: tryMakeCtor received a zero Value value")
 	}
 	numOut := t.NumOut()
 	if numOut == 0 || numOut > 2 || (numOut == 2 && t.Out(1) != terror) {
@@ -201,6 +207,11 @@ func (s *Syringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 		inTypes[i] = t.In(i)
 	}
 	construct := func(in []reflect.Value) (reflect.Value, error) {
+		for i, arg := range in {
+			if !arg.IsValid() {
+				return reflect.Value{}, fmt.Errorf("unable to create arg %d (%s) of %s constructor", i, inTypes[i], outType)
+			}
+		}
 		out := v.Call(in)
 		var err error
 		if len(out) == 2 && !out[1].IsNil() {
