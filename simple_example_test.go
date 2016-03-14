@@ -1,10 +1,10 @@
-package syringe_test
+package psyringe_test
 
 import (
 	"fmt"
 	"log"
 
-	"github.com/samsalisbury/syringe"
+	"github.com/samsalisbury/psyringe"
 )
 
 type (
@@ -27,7 +27,7 @@ func (c Command) Print() {
 }
 
 func ExampleSyringe_Simple() {
-	s := syringe.Syringe{}
+	s := psyringe.Psyringe{}
 	if err := s.Fill(NewUsername, NewHostname, NewLoadAverage); err != nil {
 		log.Fatal(err)
 	}

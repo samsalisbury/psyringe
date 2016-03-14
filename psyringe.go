@@ -1,5 +1,5 @@
-// syringe is a lazy dependency injector for Go
-package syringe
+// psyringe is a lazy dependency injector for Go
+package psyringe
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ type (
 	Logger interface {
 		Println(...interface{})
 	}
-	Syringe struct {
+	Psyringe struct {
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
 		injectionTypes map[reflect.Type]struct{}
@@ -36,15 +36,15 @@ func (e noConstructorOrValue) Error() string {
 }
 
 var (
-	DefaultSyringe = &Syringe{}
+	DefaultSyringe = &Psyringe{}
 	terror         = reflect.TypeOf((*error)(nil)).Elem()
 )
 
-func New() *Syringe {
-	return &Syringe{}
+func New() *Psyringe {
+	return &Psyringe{}
 }
 
-func (s *Syringe) init() *Syringe {
+func (s *Psyringe) init() *Psyringe {
 	if s.values != nil {
 		return s
 	}
@@ -57,10 +57,10 @@ func (s *Syringe) init() *Syringe {
 func Fill(things ...interface{}) error    { return DefaultSyringe.Fill(things...) }
 func Inject(targets ...interface{}) error { return DefaultSyringe.Inject(targets...) }
 
-// Fill fills the syringe with values and constructors. Any function that returns a
+// Fill fills the psyringe with values and constructors. Any function that returns a
 // single value, or two return values, the second of which is an error, is considered
 // to be a constructor. Everything else is considered to be a fully realised value.
-func (s *Syringe) Fill(things ...interface{}) error {
+func (s *Psyringe) Fill(things ...interface{}) error {
 	s.init()
 	for _, thing := range things {
 		if thing == nil {
@@ -73,11 +73,11 @@ func (s *Syringe) Fill(things ...interface{}) error {
 	return nil
 }
 
-func (s *Syringe) Clone() *Syringe {
+func (s *Psyringe) Clone() *Psyringe {
 	panic("Clone is not yet implemented")
 }
 
-func (s *Syringe) DebugFunc(f func(string)) {
+func (s *Psyringe) DebugFunc(f func(string)) {
 	s.debug = make(chan string)
 	go func() {
 		for {
@@ -90,7 +90,7 @@ func (s *Syringe) DebugFunc(f func(string)) {
 // tries to inject a value for each field in each target, if a value is known
 // for that field's type. All targets, and all fields in each target, are resolved
 // concurrently.
-func (s *Syringe) Inject(targets ...interface{}) error {
+func (s *Psyringe) Inject(targets ...interface{}) error {
 	if s.values == nil {
 		return fmt.Errorf("Inject called before Fill")
 	}
@@ -117,7 +117,7 @@ func (s *Syringe) Inject(targets ...interface{}) error {
 // inject just tries to inject a value for each field, no errors if it
 // fails, as maybe those other fields are just not meant to receive
 // injected values
-func (s Syringe) inject(target interface{}) error {
+func (s Psyringe) inject(target interface{}) error {
 	v := reflect.ValueOf(target)
 	ptr := v.Type()
 	if ptr.Kind() != reflect.Ptr {
@@ -155,7 +155,7 @@ func (s Syringe) inject(target interface{}) error {
 	return <-errs
 }
 
-func (s *Syringe) add(thing interface{}) error {
+func (s *Psyringe) add(thing interface{}) error {
 	v := reflect.ValueOf(thing)
 	t := v.Type()
 	var err error
@@ -175,7 +175,7 @@ func (s *Syringe) add(thing interface{}) error {
 	return err
 }
 
-func (s *Syringe) getValue(t reflect.Type) (reflect.Value, error) {
+func (s *Psyringe) getValue(t reflect.Type) (reflect.Value, error) {
 	if v, ok := s.values[t]; ok {
 		return v, nil
 	}
@@ -186,15 +186,15 @@ func (s *Syringe) getValue(t reflect.Type) (reflect.Value, error) {
 	return c.getValue(s)
 }
 
-func (s *Syringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
+func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 	if t.Kind() != reflect.Func || t.IsVariadic() {
 		return nil
 	}
 	if v.IsNil() {
-		panic("syringe internal error: tryMakeCtor received a nil value")
+		panic("psyringe internal error: tryMakeCtor received a nil value")
 	}
 	if !v.IsValid() {
-		panic("syringe internal error: tryMakeCtor received a zero Value value")
+		panic("psyringe internal error: tryMakeCtor received a zero Value value")
 	}
 	numOut := t.NumOut()
 	if numOut == 0 || numOut > 2 || (numOut == 2 && t.Out(1) != terror) {
@@ -227,7 +227,7 @@ func (s *Syringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 	}
 }
 
-func (c *ctor) getValue(s *Syringe) (reflect.Value, error) {
+func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
 	if c.value != nil {
 		return *c.value, nil
 	}
@@ -261,7 +261,7 @@ func (c *ctor) getValue(s *Syringe) (reflect.Value, error) {
 	return *c.value, nil
 }
 
-func (s *Syringe) addCtor(c *ctor) error {
+func (s *Psyringe) addCtor(c *ctor) error {
 	if err := s.registerInjectionType(c.outType); err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (s *Syringe) addCtor(c *ctor) error {
 	return nil
 }
 
-func (s *Syringe) addValue(t reflect.Type, v reflect.Value) error {
+func (s *Psyringe) addValue(t reflect.Type, v reflect.Value) error {
 	if err := s.registerInjectionType(t); err != nil {
 		return err
 	}
@@ -277,7 +277,7 @@ func (s *Syringe) addValue(t reflect.Type, v reflect.Value) error {
 	return nil
 }
 
-func (s *Syringe) registerInjectionType(t reflect.Type) error {
+func (s *Psyringe) registerInjectionType(t reflect.Type) error {
 	if _, alreadyRegistered := s.injectionTypes[t]; alreadyRegistered {
 		return fmt.Errorf("injection type %s already registered", t)
 	}
@@ -285,7 +285,7 @@ func (s *Syringe) registerInjectionType(t reflect.Type) error {
 	return nil
 }
 
-func (s *Syringe) debugf(format string, a ...interface{}) {
+func (s *Psyringe) debugf(format string, a ...interface{}) {
 	if s.debug == nil {
 		return
 	}

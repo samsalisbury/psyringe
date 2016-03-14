@@ -1,4 +1,4 @@
-package syringe_test
+package psyringe_test
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/samsalisbury/syringe"
+	"github.com/samsalisbury/psyringe"
 )
 
 type dependent struct {
@@ -17,7 +17,7 @@ type dependent struct {
 }
 
 func TestInject_Objects(t *testing.T) {
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(1, "hello", bytes.NewBuffer([]byte("world"))); err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +43,7 @@ func TestInject_Constructors(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(newInt, newString, newBuffer); err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +69,7 @@ func TestInject_Mixed(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(newBuffer, 100, newString); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestInject_CustomErrors(t *testing.T) {
 		return "", fmt.Errorf("an error")
 	}
 
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(newString); err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestInject_DependencyTree(t *testing.T) {
 		return originalBuffer
 	}
 
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +236,7 @@ func TestInject_DependencyTree_Errors(t *testing.T) {
 		return bytes.NewBuffer([]byte("yes"))
 	}
 
-	s := syringe.New()
+	s := psyringe.New()
 	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
 		t.Fatal(err)
 	}
