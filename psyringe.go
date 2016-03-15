@@ -23,13 +23,25 @@ type (
 		once      sync.Once
 		value     *reflect.Value
 	}
-	noConstructorOrValue struct {
-		ForType reflect.Type
+	NoConstructorOrValue struct {
+		ForType               reflect.Type
+		ConstructorType       *reflect.Type
+		ConstructorParamIndex *int
 	}
 )
 
-func (e noConstructorOrValue) Error() string {
-	return fmt.Sprintf("no constructor or value for %s", e.ForType)
+func (e NoConstructorOrValue) Error() string {
+	message := ""
+	if e.ConstructorType != nil {
+		message += fmt.Sprintf("unable to construct %s", *e.ConstructorType)
+	}
+	if e.ConstructorParamIndex != nil {
+		message += fmt.Sprintf(" (missing param %d)", *e.ConstructorParamIndex)
+	}
+	if message != "" {
+		message += ": "
+	}
+	return message + fmt.Sprintf("no constructor or value for %s", e.ForType)
 }
 
 var (
@@ -123,6 +135,36 @@ func (s *Psyringe) Inject(targets ...interface{}) error {
 	return <-errs
 }
 
+// Test checks that all constructors' parameters are satisfied within this
+// Psyringe. It does not invoke those constructors, it only checks that the
+// structure is valid. If any constructor parameters are not satisfiable, an
+// error is returned. This func should only be used in tests.
+func (s *Psyringe) Test() error {
+	for _, c := range s.ctors {
+		if err := c.testParametersAreRegisteredIn(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
+	for paramIndex, paramType := range c.inTypes {
+		if _, constructorExists := s.ctors[paramType]; constructorExists {
+			continue
+		}
+		if _, valueExists := s.values[paramType]; valueExists {
+			continue
+		}
+		return NoConstructorOrValue{
+			ForType:               paramType,
+			ConstructorParamIndex: &paramIndex,
+			ConstructorType:       &c.outType,
+		}
+	}
+	return nil
+}
+
 // inject just tries to inject a value for each field, no errors if it
 // fails, as maybe those other fields are just not meant to receive
 // injected values
@@ -154,7 +196,7 @@ func (s *Psyringe) inject(target interface{}) error {
 			if err == nil {
 				f.Set(fv)
 				s.debugf("Inject: populated %s.%s with %v", t, fieldName, fv)
-			} else if _, ok := err.(noConstructorOrValue); ok {
+			} else if _, ok := err.(NoConstructorOrValue); ok {
 				s.debugf("Inject: not populating %s.%s: %s", t, fieldName, err)
 			} else {
 				errs <- err
@@ -190,7 +232,7 @@ func (s *Psyringe) getValue(t reflect.Type) (reflect.Value, error) {
 	}
 	c, ok := s.ctors[t]
 	if !ok {
-		return reflect.Value{}, noConstructorOrValue{t}
+		return reflect.Value{}, NoConstructorOrValue{ForType: t}
 	}
 	return c.getValue(s)
 }
