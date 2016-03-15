@@ -8,9 +8,6 @@ import (
 )
 
 type (
-	Logger interface {
-		Println(...interface{})
-	}
 	Psyringe struct {
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
@@ -36,10 +33,12 @@ func (e noConstructorOrValue) Error() string {
 }
 
 var (
-	DefaultSyringe = &Psyringe{}
-	terror         = reflect.TypeOf((*error)(nil)).Elem()
+	globalPs = &Psyringe{}
+	terror   = reflect.TypeOf((*error)(nil)).Elem()
 )
 
+// New returns a new Psyringe. It is equivalent to simply using &Psyringe{}
+// and may be removed soon.
 func New() *Psyringe {
 	return &Psyringe{}
 }
@@ -54,12 +53,16 @@ func (s *Psyringe) init() *Psyringe {
 	return s
 }
 
-func Fill(things ...interface{}) error    { return DefaultSyringe.Fill(things...) }
-func Inject(targets ...interface{}) error { return DefaultSyringe.Inject(targets...) }
+// Fill calls Fill on the default, global Psyringe.
+func Fill(things ...interface{}) error { return globalPs.Fill(things...) }
 
-// Fill fills the psyringe with values and constructors. Any function that returns a
-// single value, or two return values, the second of which is an error, is considered
-// to be a constructor. Everything else is considered to be a fully realised value.
+// Inject calls Inject on the default, global Psyringe.
+func Inject(targets ...interface{}) error { return globalPs.Inject(targets...) }
+
+// Fill fills the psyringe with values and constructors. Any function that
+// returns a single value, or two return values, the second of which is an
+// error, is considered to be a constructor. Everything else is considered to be
+// a fully realised value.
 func (s *Psyringe) Fill(things ...interface{}) error {
 	s.init()
 	for _, thing := range things {
@@ -73,10 +76,16 @@ func (s *Psyringe) Fill(things ...interface{}) error {
 	return nil
 }
 
+// Clone is not yet implemented. It will eventually return a deep copy of this
+// psyringe.
 func (s *Psyringe) Clone() *Psyringe {
 	panic("Clone is not yet implemented")
 }
 
+// DebugFunc allows you to pass a func(string) which will be sent debugging
+// information as it arises. Note that this func has the ability to block
+// Fill and Inject calls, so be careful, and make sure you return from the
+// passed func as soon as possible.
 func (s *Psyringe) DebugFunc(f func(string)) {
 	s.debug = make(chan string)
 	go func() {
@@ -88,8 +97,8 @@ func (s *Psyringe) DebugFunc(f func(string)) {
 
 // Inject takes a list of targets, which must be pointers to struct types. It
 // tries to inject a value for each field in each target, if a value is known
-// for that field's type. All targets, and all fields in each target, are resolved
-// concurrently.
+// for that field's type. All targets, and all fields in each target, are
+// resolved concurrently.
 func (s *Psyringe) Inject(targets ...interface{}) error {
 	if s.values == nil {
 		return fmt.Errorf("Inject called before Fill")
@@ -117,7 +126,7 @@ func (s *Psyringe) Inject(targets ...interface{}) error {
 // inject just tries to inject a value for each field, no errors if it
 // fails, as maybe those other fields are just not meant to receive
 // injected values
-func (s Psyringe) inject(target interface{}) error {
+func (s *Psyringe) inject(target interface{}) error {
 	v := reflect.ValueOf(target)
 	ptr := v.Type()
 	if ptr.Kind() != reflect.Ptr {
