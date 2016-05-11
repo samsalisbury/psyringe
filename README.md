@@ -33,7 +33,7 @@ See a [simple usage example], below.
 
 ### Concurrent and lazy
 
-Value graphs are populated recursively, and concurrently where the structure allows. For example, in the following code, both `NewRay` and `NewComb` will be run simultaneously when running `psyringe.Inject` since neither depends on the other. However `NewWhat` will not be run, since `NeedsWidget` does not have a `What` field.
+Value graphs are populated recursively, and concurrently where the structure allows. For example, in the following code, both `NewLaser` and `NewCog` will be run simultaneously when running `psyringe.Inject` since neither depends on the other. However `NewBanana` will not be run, since `FlyingSaucer` does not have any transitive dependency on it.
 
 ```go
 func NewLaser() Laser                 { return Laser{} }
@@ -41,11 +41,13 @@ func NewCog() Cog                     { return Cog{} }
 func NewBanana() Banana               { panic("this won't be called") }
 func NewCannon(x Laser, y Cog) Widget { return Cannon{x, y} }
 
-type Cannon struct {
-	BeamGenerator Laser
-	Rotator       Cog
-}
-type FlyingSaucer struct { MainGun Cannon }
+type (
+    Cannon struct {
+	    BeamGenerator Laser
+	    Rotator       Cog
+    }
+    FlyingSaucer struct { MainGun Cannon }
+)
 
 psyringe.Fill(NewCannon, NewLaser, NewCog, NewBanana)
 ufo := FlyingSaucer{}
@@ -54,17 +56,17 @@ psyringe.Inject(&ufo)
 
 ### No Tags
 
-Unlike most dependency injectors for Go, this one does not require you to litter your structs with tags. Instead, it relies on well-written Go code to perform injection based solely on the types of your struct fields.
+Unlike most dependency injectors for Go, this one does not require you to litter your structs with tags. Instead, it relies on well-written Go code to perform injection based solely on the types of your struct fields and constructor parameters.
 
 ### Simple API
 
-Psyringe follows through on its metaphor. You `Fill` the psyringe with things, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like dependency scoping yourself. For example, you can create multiple psyringes and have all of them inject different dependencies into the same struct.
+Psyringe follows through on its metaphor. You `Fill` the psyringe with things, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like scoping yourself. For example, you can create multiple psyringes and have each of them inject different dependencies into the same struct.
 
 ### Advanced Uses
 
 Although the API is simple, and doesn't explicitly support scopes or named instances, these things are trivial to implement yourself. For example, scopes can be created by using multiple psyringes, one at application level, and another within a http request, for example. See a complete example HTTP server using multiple scopes, below.
 
-Likewise, named instances (i.e. multiple different instances of the same type) can be created by aliasing the type name.
+Likewise, named instances (i.e. multiple different instances of the same type) can be created by aliasing the type name, or wrapping it in a struct.
 
 ### Why "psyringe"?
 
