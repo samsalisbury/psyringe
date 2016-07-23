@@ -40,7 +40,7 @@ func TestFill_AlreadyRegisteredError(t *testing.T) {
 		err := New().Fill(a, b)
 		what := fmt.Sprintf("Fill(%T, %T)", a, b)
 		if err == nil {
-			t.Errorf("nil error for", what)
+			t.Errorf("nil error for %s", what)
 		}
 		expectedError := fmt.Sprintf("injection type %s already registered",
 			expectedInjectionType)
@@ -57,6 +57,9 @@ func TestFill_AlreadyRegisteredError(t *testing.T) {
 	e(1, 2, "int")
 	e(func() {}, func() {}, "func()")
 	e(struct{}{}, struct{}{}, "struct {}")
+	// Note: func() (string, string) is not a constructor type, thus its
+	// injection type is itself. (Constructors either have one return value, or
+	// one plus an error.
 	e(
 		func() (string, string) { return "", "" },
 		func() (string, string) { return "hello", "world" },

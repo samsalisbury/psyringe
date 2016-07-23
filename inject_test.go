@@ -105,14 +105,14 @@ func TestInject_CustomErrors(t *testing.T) {
 
 	err := s.Inject(&d)
 	if err == nil {
-		t.Fatalf("constructor error not returned")
+		t.Fatal("constructor error not returned")
 	}
 
 	actual := err.Error()
 	expected := "an error"
 
 	if actual != expected {
-		t.Errorf("got error %s; want %q", actual, expected)
+		t.Errorf("got error %q; want %q", actual, expected)
 	}
 }
 
@@ -124,17 +124,17 @@ func TestInject_DependencyTree(t *testing.T) {
 	var (
 		// We want to monitor that each constructor is only called
 		// once. Since we know the tree is resolved concurrently where
-		// possible, we need to syncronise the counters...
+		// possible, we need to synchronise the counters...
 		newDependentCounter,
 		newStringCounter,
 		newIntCounter,
 		newBufferCounter uint64
 
 		// Also monitor the reference to buffer that each constructor sees
-		newDependentBuffer,
-		newStringBuffer,
-		newIntBuffer,
-		originalBuffer *bytes.Buffer
+		newDependentBufferRef,
+		newStringBufferRef,
+		newIntBufferRef,
+		originalBufferRef *bytes.Buffer
 	)
 
 	// Here are 4 constructors. Notice how all but newBuffer take
@@ -146,7 +146,7 @@ func TestInject_DependencyTree(t *testing.T) {
 	// makes a note of the buffer reference it was passed.
 	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
 		atomic.AddUint64(&newDependentCounter, 1)
-		newDependentBuffer = b
+		newDependentBufferRef = b
 		return dependent{
 			Int:    i,
 			String: s,
@@ -155,18 +155,18 @@ func TestInject_DependencyTree(t *testing.T) {
 	}
 	newString := func(i int, b *bytes.Buffer) string {
 		atomic.AddUint64(&newStringCounter, 1)
-		newStringBuffer = b
+		newStringBufferRef = b
 		return strings.Repeat(b.String(), i)
 	}
 	newInt := func(b *bytes.Buffer) int {
 		atomic.AddUint64(&newIntCounter, 1)
-		newIntBuffer = b
+		newIntBufferRef = b
 		return b.Len()
 	}
 	newBuffer := func() *bytes.Buffer {
 		atomic.AddUint64(&newBufferCounter, 1)
-		originalBuffer = bytes.NewBuffer([]byte("yes"))
-		return originalBuffer
+		originalBufferRef = bytes.NewBuffer([]byte("yes"))
+		return originalBufferRef
 	}
 
 	s := psyringe.New()
@@ -182,13 +182,13 @@ func TestInject_DependencyTree(t *testing.T) {
 
 	// Assert values are correct in final graph
 	if d.Dependency.Int != 3 {
-		fmt.Errorf("int not injected correctly")
+		t.Errorf("int not injected correctly")
 	}
 	if d.Dependency.Buffer.String() != "yes" {
-		fmt.Errorf("buffer not injected correctly")
+		t.Errorf("buffer not injected correctly")
 	}
 	if d.Dependency.String != "yesyesyes" {
-		fmt.Errorf("string not injected correctly")
+		t.Errorf("string not injected correctly")
 	}
 
 	// Assert that each constructor was called exactly once
@@ -205,14 +205,17 @@ func TestInject_DependencyTree(t *testing.T) {
 		t.Errorf("newBuffer was executed %d times; expected 1", newBufferCounter)
 	}
 
-	// Assert that each instance of buffer is exactly the same.
-	if newDependentBuffer != originalBuffer {
+	// Assert that each instance of buffer is exactly the same and not nil.
+	if originalBufferRef == nil {
+		t.Errorf("originalBuffer is nil")
+	}
+	if newDependentBufferRef != originalBufferRef {
 		t.Errorf("newDependent did not receive the original buffer")
 	}
-	if newStringBuffer != originalBuffer {
-		t.Errorf("newString did not receice the original buffer")
+	if newStringBufferRef != originalBufferRef {
+		t.Errorf("newString did not receive the original buffer")
 	}
-	if newIntBuffer != originalBuffer {
+	if newIntBufferRef != originalBufferRef {
 		t.Errorf("newInt did not receive the original buffer")
 	}
 }
