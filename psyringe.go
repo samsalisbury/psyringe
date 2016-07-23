@@ -1,4 +1,32 @@
-// psyringe is a lazy dependency injector for Go
+// Package psyringe is an easy to use, lazy and concurrent dependency injector.
+// It's really fast too.
+//
+// Psyringe is unlike other Dependency injectors in the following ways:
+//
+//     - No need to reference psyringe everywhere.
+//     - No reliance on struct field tags.
+//     - Uses simple named types to define well-known instances.
+//     - Dependencies are realised in parallel, automatically.
+//     - Scoping is achieved via standard Go code.
+//     - Supports one-hit CLI applications by having blazingly fast
+//       initialisation.
+//     - Supports long-running applications like HTTP servers via trivial
+//       scoping and intelligent caching of reflected initialisation plans.
+//     - In all cases is super easy to use.
+//
+// Basic usage looks something like this:
+//
+//     type SomeStruct {
+//         Widget
+//         Thing
+//     }
+//     p := psyringe.New()
+//     p.Fill(newWidget, newThing)
+//     v := SomeStruct{}
+//     err := p.Inject(&v)
+//     if err != nil {
+//         handle(err)
+//     }
 package psyringe
 
 import (
@@ -8,6 +36,8 @@ import (
 )
 
 type (
+	// A Psyringe should be filled with constructors and fully realised values.
+	// It an then be used to inject these as dependencies into struct values.
 	Psyringe struct {
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
@@ -15,6 +45,7 @@ type (
 		ctorMutex      sync.Mutex
 		debug          chan string
 	}
+	// ctor is a constructor for a single value.
 	ctor struct {
 		outType   reflect.Type
 		inTypes   []reflect.Type
@@ -23,9 +54,18 @@ type (
 		once      sync.Once
 		value     *reflect.Value
 	}
+	// NoConstructorOrValue is an error returned when Psyringe has no way of
+	// injecting a value of a specific type into one of its constructors, due to
+	// no constructor or value of that injection type being put into a Psyringe
+	// with Psyringe.Fill.
 	NoConstructorOrValue struct {
-		ForType               reflect.Type
-		ConstructorType       *reflect.Type
+		// ForType is the type for which no constructor or value is available.
+		ForType reflect.Type
+		// ConstructorType is the constructor function requiring a value of type
+		// ForType.
+		ConstructorType *reflect.Type
+		// ConstructorParamIndex is the zero-based index of the first parameter
+		// in ConstructorType of type ForType.
 		ConstructorParamIndex *int
 	}
 )
@@ -71,7 +111,7 @@ func Fill(things ...interface{}) error { return globalPs.Fill(things...) }
 // Inject calls Inject on the default, global Psyringe.
 func Inject(targets ...interface{}) error { return globalPs.Inject(targets...) }
 
-// Fill fills the psyringe with values and constructors. Any function that
+// Fill fills thepsyringe with values and constructors. Any function that
 // returns a single value, or two return values, the second of which is an
 // error, is considered to be a constructor. Everything else is considered to be
 // a fully realised value.
