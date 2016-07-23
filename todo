@@ -1,0 +1,14 @@
+TODO:
+
+	- Add benchmarks
+	- Find other benchmarks to compare with
+	- Add debugging mode to detect goroutine leaks?
+
+	- Implement Clone
+	- Compare benchmarks with Clone vs Fill
+
+	- Add HTTP server example
+	
+	- Add Even Lazier TM injection using struct func fields.
+	- Never add tags! Never!
+
