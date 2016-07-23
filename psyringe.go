@@ -39,11 +39,13 @@ type (
 	// A Psyringe should be filled with constructors and fully realised values.
 	// It an then be used to inject these as dependencies into struct values.
 	Psyringe struct {
+		initOnce       sync.Once
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
 		injectionTypes map[reflect.Type]struct{}
 		ctorMutex      sync.Mutex
-		debug          chan string
+		debug          func(...interface{})
+		debugf         func(string, ...interface{})
 	}
 	// ctor is a constructor for a single value.
 	ctor struct {
@@ -95,14 +97,18 @@ func New() *Psyringe {
 	return &Psyringe{}
 }
 
-func (s *Psyringe) init() *Psyringe {
-	if s.values != nil {
-		return s
-	}
+// init is called exactly once, and makes sure the maps and debug funcs are not
+// nil.
+func (s *Psyringe) init() {
 	s.values = map[reflect.Type]reflect.Value{}
 	s.ctors = map[reflect.Type]*ctor{}
 	s.injectionTypes = map[reflect.Type]struct{}{}
-	return s
+	if s.debug == nil {
+		s.debug = func(...interface{}) {}
+	}
+	if s.debugf == nil {
+		s.debugf = func(string, ...interface{}) {}
+	}
 }
 
 // Fill calls Fill on the default, global Psyringe.
@@ -111,15 +117,15 @@ func Fill(things ...interface{}) error { return globalPs.Fill(things...) }
 // Inject calls Inject on the default, global Psyringe.
 func Inject(targets ...interface{}) error { return globalPs.Inject(targets...) }
 
-// Fill fills thepsyringe with values and constructors. Any function that
+// Fill fills the psyringe with values and constructors. Any function that
 // returns a single value, or two return values, the second of which is an
 // error, is considered to be a constructor. Everything else is considered to be
 // a fully realised value.
 func (s *Psyringe) Fill(things ...interface{}) error {
-	s.init()
-	for _, thing := range things {
+	s.initOnce.Do(s.init)
+	for i, thing := range things {
 		if thing == nil {
-			return fmt.Errorf("Fill requires non-nil items")
+			return fmt.Errorf("Fill passed nil as argument %d", i)
 		}
 		if err := s.add(thing); err != nil {
 			return err
@@ -134,18 +140,15 @@ func (s *Psyringe) Clone() *Psyringe {
 	panic("Clone is not yet implemented")
 }
 
-// DebugFunc allows you to pass a func(string) which will be sent debugging
-// information as it arises. Note that this func has the ability to block
-// Fill and Inject calls, so be careful, and make sure you return from the
-// passed func as soon as possible.
-func (s *Psyringe) DebugFunc(f func(string)) {
-	s.debug = make(chan string)
-	go func() {
-		for {
-			f(<-s.debug)
-		}
-	}()
-}
+// SetDebugFunc allows you to pass a debug function which will be sent debug
+// level logs. The debug function has the same signature as log.Println from the
+// standard library, so you could pass that if you wanted.
+func (s *Psyringe) SetDebugFunc(f func(...interface{})) { s.debug = f }
+
+// SetDebugfFunc allows you to pass a debug function which will be sent debug
+// level logs. The debug function has the same signature as log.Printf from the
+// standard library, so you could pass that if you wanted.
+func (s *Psyringe) SetDebugfFunc(f func(string, ...interface{})) { s.debugf = f }
 
 // Inject takes a list of targets, which must be pointers to struct types. It
 // tries to inject a value for each field in each target, if a value is known
@@ -374,11 +377,4 @@ func (s *Psyringe) registerInjectionType(t reflect.Type) error {
 	}
 	s.injectionTypes[t] = struct{}{}
 	return nil
-}
-
-func (s *Psyringe) debugf(format string, a ...interface{}) {
-	if s.debug == nil {
-		return
-	}
-	s.debug <- fmt.Sprintf(format, a...)
 }
