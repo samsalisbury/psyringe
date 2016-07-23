@@ -37,7 +37,7 @@ import (
 
 type (
 	// A Psyringe should be filled with constructors and fully realised values.
-	// It an then be used to inject these as dependencies into struct values.
+	// It can then be used to inject these as dependencies into struct values.
 	Psyringe struct {
 		initOnce       sync.Once
 		values         map[reflect.Type]reflect.Value
@@ -63,8 +63,8 @@ type (
 	NoConstructorOrValue struct {
 		// ForType is the type for which no constructor or value is available.
 		ForType reflect.Type
-		// ConstructorType is the constructor function requiring a value of type
-		// ForType.
+		// ConstructorType is the type of the constructor function requiring a
+		// value of type ForType.
 		ConstructorType *reflect.Type
 		// ConstructorParamIndex is the zero-based index of the first parameter
 		// in ConstructorType of type ForType.
@@ -91,8 +91,9 @@ var (
 	terror   = reflect.TypeOf((*error)(nil)).Elem()
 )
 
-// New returns a new Psyringe. It is equivalent to simply using &Psyringe{}
-// and may be removed soon.
+// New returns a new Psyringe. It is equivalent to simply using &Psyringe{} but
+// is shorter and allows you to write 'psyringe.New()' which reads better than
+// '&psyringe.Psyringe{}'.
 func New() *Psyringe {
 	return &Psyringe{}
 }
@@ -134,8 +135,10 @@ func (s *Psyringe) Fill(things ...interface{}) error {
 	return nil
 }
 
-// Clone is not yet implemented. It will eventually return a deep copy of this
-// psyringe.
+// Clone returns a clone of this Psyringe with all the reflection already
+// performed, and all of the constructed values removed, ready to Inject again.
+// Any non-constructor values passed into the original psyringe will still be
+// there in the clone. (Not yet implemented.)
 func (s *Psyringe) Clone() *Psyringe {
 	panic("Clone is not yet implemented")
 }
@@ -208,9 +211,9 @@ func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 	return nil
 }
 
-// inject just tries to inject a value for each field, no errors if it
-// fails, as maybe those other fields are just not meant to receive
-// injected values
+// inject just tries to inject a value for each field, no errors if it doesn't
+// know how to inject a value for the field's type, , as maybe those other
+// fields are just not meant to receive injected values from this Psyringe.
 func (s *Psyringe) inject(target interface{}) error {
 	v := reflect.ValueOf(target)
 	ptr := v.Type()
@@ -235,12 +238,11 @@ func (s *Psyringe) inject(target interface{}) error {
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, fieldName string) {
 			defer wg.Done()
-			fv, err := s.getValue(f.Type())
-			if err == nil {
+			if fv, err := s.getValue(f.Type()); err == nil {
 				f.Set(fv)
-				s.debugf("Inject: populated %s.%s with %v", t, fieldName, fv)
+				s.debugf("populated %s.%s with %v", t, fieldName, fv)
 			} else if _, ok := err.(NoConstructorOrValue); ok {
-				s.debugf("Inject: not populating %s.%s: %s", t, fieldName, err)
+				s.debugf("not populating %s.%s: %s", t, fieldName, err)
 			} else {
 				errs <- err
 			}
@@ -262,9 +264,9 @@ func (s *Psyringe) add(thing interface{}) error {
 		err = s.addValue(t, v)
 	}
 	if err != nil {
-		s.debugf("Fill: error adding %s (%T): %s", what, thing, err)
+		s.debugf("error adding %s (%T): %s", what, thing, err)
 	} else {
-		s.debugf("Fill: added %s (%T)", what, thing)
+		s.debugf("added %s (%T)", what, thing)
 	}
 	return err
 }
@@ -303,7 +305,9 @@ func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 	construct := func(in []reflect.Value) (reflect.Value, error) {
 		for i, arg := range in {
 			if !arg.IsValid() {
-				return reflect.Value{}, fmt.Errorf("unable to create arg %d (%s) of %s constructor", i, inTypes[i], outType)
+				return reflect.Value{},
+					fmt.Errorf("unable to create arg %d (%s) of %s constructor",
+						i, inTypes[i], outType)
 			}
 		}
 		out := v.Call(in)
@@ -356,19 +360,13 @@ func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
 }
 
 func (s *Psyringe) addCtor(c *ctor) error {
-	if err := s.registerInjectionType(c.outType); err != nil {
-		return err
-	}
 	s.ctors[c.outType] = c
-	return nil
+	return s.registerInjectionType(c.outType)
 }
 
 func (s *Psyringe) addValue(t reflect.Type, v reflect.Value) error {
-	if err := s.registerInjectionType(t); err != nil {
-		return err
-	}
 	s.values[t] = v
-	return nil
+	return s.registerInjectionType(t)
 }
 
 func (s *Psyringe) registerInjectionType(t reflect.Type) error {
