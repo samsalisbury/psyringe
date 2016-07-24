@@ -1,18 +1,19 @@
 /*
-Package psyringe is an easy to use, lazy and concurrent dependency injector.
+Package psyringe provides an easy to use, lazy and concurrent dependency
+injector.
 
-This DI package makes dependency injection very easy for well-written Go code,
-and does not rely on messy struct field tags nor verbose graph construction
-syntax, and it keeps "magic" to an absolute minimum. Psyringe is suitable for
-both one-hit CLI applications as well as long-running processes like HTTP
-servers, or indeed any scenario when you want to use dependency injection.
+Psyringe makes dependency injection very easy for well-written Go code. It
+uses Go's type system to decide what to inject, and uses channels to orchestrate
+value construction, automatically being as concurrent as your dependency graph
+allows.
 
-Psyringe does not make any assumptions about scoping or value lifetimes, but
-makes it really easy to implement these features in a suitable way for your
-application.
+Psyringe does not rely on messy struct field tags nor verbose graph construction
+syntax, and it keeps "magic" to an absolute minimum. It is very flexible
+and has a small interface, allowing you to tailor things like scopes and object
+lifetimes very easily using standard Go code.
 
-The examples below should speak for themselves, but if you want a deeper
-explanation of how Psyringe works, read on...
+The examples (below) should speak for themselves, but if you want a deeper
+explanation of how Psyringe works, read on.
 
 Injection Type
 
@@ -41,6 +42,13 @@ implicitly constructs a directed acyclic graph (DAG) from the constructors and
 values, channelling values of each injection type into the relevant parameter
 of any constructors which require it, and ultimately into any fields of that
 type in the target struct which require it.
+
+For a given Psyringe, each constructor can be called at most once. After that,
+the generated value is provided directly without calling the constructor again.
+Thus every value in a psyringe is effectively a singleton. The Clone method
+allows taking snapshots of a Psyringe in order to re-use its constructor graph
+whilst generating new values; and it is idiomatic to use multiple Psyringes with
+differing scopes to inject different fields into the same object.
 */
 package psyringe
 
