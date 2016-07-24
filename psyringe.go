@@ -180,12 +180,12 @@ func (s *Psyringe) MustAdd(constructorsAndValues ...interface{}) {
 	}
 }
 
-// Clone returns a bytewise clone of this Psyringe.
+// Clone returns a clone of this Psyringe.
 //
 // Clone exists to provide efficiency by allowing you to Add constructors and
 // values once, and then invoke them multiple times for different instances.
 // This is especially important in long-running applications where the cost of
-// calling Add repeatedly may get expensive.
+// calling Add or New repeatedly may get expensive.
 func (s *Psyringe) Clone() *Psyringe {
 	p := *s
 	p.ctors = map[reflect.Type]*ctor{}
