@@ -80,50 +80,9 @@ psyringe is a _parallel syringe_ which automatically injects multiple values sim
 Create a new psyringe with `p := psyringe.MustNew` passing in constructors and other values.
 Then, call `p.Inject(...)` to inject those values into structs with correspondingly typed fields.
 
-### Simple Usage Example
+Please see [the documentation] for lots of usage examples.
 
-```go
-package psyringe_test
-
-import (
-	"fmt"
-	"log"
-
-	"github.com/samsalisbury/psyringe"
-)
-
-type (
-	Command struct {
-		User Username
-		Host Hostname
-		Load LoadAverage
-	}
-	Username    string
-	Hostname    string
-	LoadAverage float64
-)
-
-func NewUsername() Username       { return "bob" }
-func NewHostname() Hostname       { return Hostname("localhost") }
-func NewLoadAverage() LoadAverage { return 0.83 }
-
-func (c Command) Print() {
-	fmt.Printf("User: %s, Host: %s, Load average: %.2f", c.User, c.Host, c.Load)
-}
-
-func ExamplePsyringe_Simple() {
-	s := psyringe.Psyringe{}
-	if err := s.Fill(NewUsername, NewHostname, NewLoadAverage); err != nil {
-		log.Fatal(err)
-	}
-	command := Command{}
-	s.Inject(&command)
-	command.Print()
-	// output:
-	// User: bob, Host: localhost, Load average: 0.83
-}
-
-```
+[the documentation]: https://godoc.org/github.com/samsalisbury/psyringe
 
 ### Advanced usage
 
@@ -165,8 +124,8 @@ If you need values with different scopes (a.k.a. lifetimes), then you can use mu
 var appScopedPsyringe, requestScopedPsyringe psyringe.Psyringe
 
 func main() {
-	appScopedPsyringe = psyringe.New().Fill(ApplicationScopedThings...)
-	requestPsyringe = psyringe.New().Fill(RequestScopedThings...)
+	appScopedPsyringe = psyringe.MustNew(ApplicationScopedThings...)
+	requestPsyringe = psyringe.MustNew(RequestScopedThings...)
 	http.HandleFunc("/", HandleHTTPRequest)
 	http.ListenAndServe(":8080")
 }
@@ -206,9 +165,9 @@ func HandleHTTPRequest(w http.ResponseWriter, r *http.Request) {
 
 ### How does it work?
 
-Each item you pass into `.Fill()` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is considered to be a _value_ and its own type is used as its injection type. Your psyringe knows how to inject values of each registered injection type.
+Each item you pass into `Add` or `New` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is considered to be a _value_ and its own type is used as its injection type. Your psyringe knows how to inject values of each registered injection type.
 
-When you call `.Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the psyringe. For constructors, it will call that constructor exactly once to generate its value, if needed. For non-constructor values that were passed in to `Fill`, it will simply inject that value when called to.
+When you call `Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the psyringe. For constructors, it will call that constructor exactly once to generate its value, if needed. For non-constructor values that were passed in to the `Psyringe`, it will simply inject that value when called to.
 
 Each parameter in a constructor will need to also be available in the psyringe, in order for that constructor to be successfully invoked. If not, `.Inject` will return an error.
 
