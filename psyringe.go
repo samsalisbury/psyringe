@@ -62,11 +62,10 @@ type (
 	// A Psyringe holds a collection of constructors and fully realised values
 	// which can be injected into structs which depend on them.
 	Psyringe struct {
-		initOnce       sync.Once
+		initOnce       *sync.Once
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
 		injectionTypes map[reflect.Type]struct{}
-		ctorMutex      sync.Mutex
 		debug          func(...interface{})
 		debugf         func(string, ...interface{})
 	}
@@ -76,7 +75,7 @@ type (
 		inTypes   []reflect.Type
 		construct func(in []reflect.Value) (reflect.Value, error)
 		errChan   chan error
-		once      sync.Once
+		once      *sync.Once
 		value     *reflect.Value
 	}
 	// NoConstructorOrValue is an error returned when Psyringe has no way of
@@ -122,7 +121,7 @@ func New(constructorsAndValues ...interface{}) (*Psyringe, error) {
 
 // MustNew wraps New, and panics if New returns an error.
 func MustNew(constructorsAndValues ...interface{}) *Psyringe {
-	p, err := New(constructorsAndValues)
+	p, err := New(constructorsAndValues...)
 	if err != nil {
 		panic(err)
 	}
@@ -159,6 +158,9 @@ func (s *Psyringe) init() {
 // of reflect.Values ready to be used by a call to Inject. As such, Add is a
 // relatively expensive call. See Clone for how to avoid calling Add too often.
 func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
+	if s.initOnce == nil {
+		s.initOnce = &sync.Once{}
+	}
 	s.initOnce.Do(s.init)
 	for i, thing := range constructorsAndValues {
 		if thing == nil {
@@ -185,7 +187,22 @@ func (s *Psyringe) MustAdd(constructorsAndValues ...interface{}) {
 // This is especially important in long-running applications where the cost of
 // calling Add repeatedly may get expensive.
 func (s *Psyringe) Clone() *Psyringe {
-	panic("Clone is not yet implemented")
+	p := *s
+	p.ctors = map[reflect.Type]*ctor{}
+	p.values = map[reflect.Type]reflect.Value{}
+	for t, c := range s.ctors {
+		p.ctors[t] = c.clone()
+	}
+	for t, v := range s.values {
+		p.values[t] = v
+	}
+	return &p
+}
+
+func (c ctor) clone() *ctor {
+	c.once = &sync.Once{}
+	c.errChan = make(chan error)
+	return &c
 }
 
 // SetDebugFunc allows you to pass a debug function which will be sent debug
@@ -395,6 +412,7 @@ func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 		inTypes:   inTypes,
 		construct: construct,
 		errChan:   make(chan error),
+		once:      &sync.Once{},
 	}
 }
 

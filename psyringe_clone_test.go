@@ -1,9 +1,6 @@
 package psyringe
 
-import (
-	"fmt"
-	"testing"
-)
+import "testing"
 
 type (
 	TestCloneNeedsString struct {
@@ -21,13 +18,16 @@ func TestPsyringe_Clone(t *testing.T) {
 	original := MustNew(
 		func() string {
 			stringCounter.Increment()
-			return fmt.Sprintf("#%d", stringCounter)
+			return "#" + stringCounter.String()
 		},
 		func() int64 {
 			intCounter.Increment()
 			return intCounter.Value()
 		},
 	)
+
+	//original.SetDebugFunc(log.Println)
+	//original.SetDebugfFunc(log.Printf)
 
 	// Create a couple of clones.
 	clone1 := original.Clone()
@@ -40,6 +40,7 @@ func TestPsyringe_Clone(t *testing.T) {
 	for i := 0; i < 999; i++ {
 		original.Inject(&ns)
 	}
+	original.Inject(&ns)
 	expected := "#1"
 	if ns.String != expected {
 		t.Fatalf("got %q; want %q", ns.String, expected)
