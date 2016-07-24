@@ -1,6 +1,9 @@
 TODO:
 
-	- Add benchmarks
+	- Make injection more efficient.
+	  (The benchmarks imply this is relatively expensive still, may be
+      worth caching injection plan per target type, for use in cloned
+      Psyringes.)
 	- Find other benchmarks to compare with
 	- Add debugging mode to detect goroutine leaks?
 
