@@ -4,8 +4,7 @@ TODO:
 	- Find other benchmarks to compare with
 	- Add debugging mode to detect goroutine leaks?
 
-	- Implement Clone
-	- Compare benchmarks with Clone vs Fill
+	- Compare benchmarks with Clone vs New
 
 	- Add HTTP server example
 	
