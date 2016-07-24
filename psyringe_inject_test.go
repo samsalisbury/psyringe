@@ -1,13 +1,10 @@
-package psyringe_test
+package psyringe
 
 import (
 	"bytes"
 	"fmt"
 	"strings"
-	"sync/atomic"
 	"testing"
-
-	"github.com/samsalisbury/psyringe"
 )
 
 type dependent struct {
@@ -17,7 +14,7 @@ type dependent struct {
 }
 
 func TestInject_Objects(t *testing.T) {
-	s, err := psyringe.New(1, "hello", bytes.NewBuffer([]byte("world")))
+	s, err := New(1, "hello", bytes.NewBuffer([]byte("world")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +40,7 @@ func TestInject_Constructors(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s, err := psyringe.New(newInt, newString, newBuffer)
+	s, err := New(newInt, newString, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,7 +66,7 @@ func TestInject_Mixed(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s, err := psyringe.New(newBuffer, 100, newString)
+	s, err := New(newBuffer, 100, newString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +93,7 @@ func TestInject_CustomErrors(t *testing.T) {
 		return "", fmt.Errorf("an error")
 	}
 
-	s, err := psyringe.New(newString)
+	s, err := New(newString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +125,7 @@ func TestInject_DependencyTree(t *testing.T) {
 		newDependentCounter,
 		newStringCounter,
 		newIntCounter,
-		newBufferCounter uint64
+		newBufferCounter Counter
 
 		// Also monitor the reference to buffer that each constructor sees
 		newDependentBufferRef,
@@ -145,7 +142,7 @@ func TestInject_DependencyTree(t *testing.T) {
 	// Each constructor atomically increments its call counter, and
 	// makes a note of the buffer reference it was passed.
 	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
-		atomic.AddUint64(&newDependentCounter, 1)
+		newDependentCounter.Increment()
 		newDependentBufferRef = b
 		return dependent{
 			Int:    i,
@@ -154,22 +151,22 @@ func TestInject_DependencyTree(t *testing.T) {
 		}
 	}
 	newString := func(i int, b *bytes.Buffer) string {
-		atomic.AddUint64(&newStringCounter, 1)
+		newStringCounter.Increment()
 		newStringBufferRef = b
 		return strings.Repeat(b.String(), i)
 	}
 	newInt := func(b *bytes.Buffer) int {
-		atomic.AddUint64(&newIntCounter, 1)
+		newIntCounter.Increment()
 		newIntBufferRef = b
 		return b.Len()
 	}
 	newBuffer := func() *bytes.Buffer {
-		atomic.AddUint64(&newBufferCounter, 1)
+		newBufferCounter.Increment()
 		originalBufferRef = bytes.NewBuffer([]byte("yes"))
 		return originalBufferRef
 	}
 
-	s, err := psyringe.New(newDependent, newString, newInt, newBuffer)
+	s, err := New(newDependent, newString, newInt, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,16 +189,16 @@ func TestInject_DependencyTree(t *testing.T) {
 	}
 
 	// Assert that each constructor was called exactly once
-	if newDependentCounter != 1 {
+	if newDependentCounter.Value() != 1 {
 		t.Errorf("newDependent was executed %d times; expected 1", newDependentCounter)
 	}
-	if newStringCounter != 1 {
+	if newStringCounter.Value() != 1 {
 		t.Errorf("newString was executed %d times; expected 1", newStringCounter)
 	}
-	if newIntCounter != 1 {
+	if newIntCounter.Value() != 1 {
 		t.Errorf("newInt was executed %d times; expected 1", newIntCounter)
 	}
-	if newBufferCounter != 1 {
+	if newBufferCounter.Value() != 1 {
 		t.Errorf("newBuffer was executed %d times; expected 1", newBufferCounter)
 	}
 
@@ -239,7 +236,7 @@ func TestInject_DependencyTree_Errors(t *testing.T) {
 		return bytes.NewBuffer([]byte("yes"))
 	}
 
-	s, err := psyringe.New(newDependent, newString, newInt, newBuffer)
+	s, err := New(newDependent, newString, newInt, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
