@@ -210,7 +210,7 @@ func (c ctor) clone() *ctor {
 // log.Println from the standard library. If SetDebugFunc is not called, all
 // debug messages are passed to a noop.
 //
-// If you pass nil, SetDebugFunc will revert to using the noop.
+// If you pass nil, will revert to using the noop.
 func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 	if f != nil {
 		s.debug = f
@@ -224,7 +224,7 @@ func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 // log.Printf from the standard library. If SetDebugfFunc is not called, all
 // debug messages are passed to a noop.
 //
-// If you pass nil, SetDebugfFunc will revert to using the noop.
+// If you pass nil, will revert to using the noop.
 func (s *Psyringe) SetDebugfFunc(f func(string, ...interface{})) {
 	if f != nil {
 		s.debugf = f
