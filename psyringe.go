@@ -51,13 +51,8 @@ import (
 )
 
 type (
-	// A Psyringe should be filled with constructors and fully realised values.
-	// It can then be used to inject these as dependencies into struct values.
-
-	// A Psyringe holds a collection of constructors and fully realised values.
-	// Constructors are any functions which return a single value, or two values
-	// where the second is an error; any other type is considered to be a fully
-	// realised value.
+	// A Psyringe holds a collection of constructors and fully realised values
+	// which can be injected into structs which depend on them.
 	Psyringe struct {
 		initOnce       sync.Once
 		values         map[reflect.Type]reflect.Value
@@ -78,8 +73,8 @@ type (
 	}
 	// NoConstructorOrValue is an error returned when Psyringe has no way of
 	// injecting a value of a specific type into one of its constructors, due to
-	// no constructor or value of that injection type being put into a Psyringe
-	// with Psyringe.Fill.
+	// no constructor or value of that injection type being put into the
+	// Psyringe.
 	NoConstructorOrValue struct {
 		// ForType is the type for which no constructor or value is available.
 		ForType reflect.Type
@@ -110,24 +105,24 @@ var (
 	terror = reflect.TypeOf((*error)(nil)).Elem()
 )
 
-// New returns a new Psyringe, with cotorsAndValues added. It is equivalent to:
-//
-//     p := &Psyringe{}; return p, p.Add(ctorsAndValues...)
-//
-// See documentation for Add for more details.
-func New(ctorsAndValues ...interface{}) (*Psyringe, error) {
+// New creates a new Psyringe, and adds the provided constructors and values to
+// it. It returns an error if Add returns an error. See Add for more details.
+func New(constructorsAndValues ...interface{}) (*Psyringe, error) {
 	p := &Psyringe{}
-	return p, p.Add(ctorsAndValues...)
+	return p, p.Add(constructorsAndValues...)
 }
 
 // MustNew wraps New, and panics if New returns an error.
-func MustNew(ctorsAndValues ...interface{}) *Psyringe {
-	p, err := New(ctorsAndValues)
+func MustNew(constructorsAndValues ...interface{}) *Psyringe {
+	p, err := New(constructorsAndValues)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
+
+func noopDebug(...interface{})          {}
+func noopDebugf(string, ...interface{}) {}
 
 // init is called exactly once, and makes sure the Psyringe itself, as well as
 // maps and debug funcs are not nil.
@@ -139,25 +134,27 @@ func (s *Psyringe) init() {
 	s.ctors = map[reflect.Type]*ctor{}
 	s.injectionTypes = map[reflect.Type]struct{}{}
 	if s.debug == nil {
-		s.debug = func(...interface{}) {}
+		s.debug = noopDebug
 	}
 	if s.debugf == nil {
-		s.debugf = func(string, ...interface{}) {}
+		s.debugf = noopDebugf
 	}
+	s.debugf("Psyringe %v initialised.", s)
 }
 
-// Add adds values and constructors to the Psyringe. Any function that
-// returns a single value, or two return values, the second of which is an
-// error, is considered to be a constructor. Everything else is considered to be
-// a fully realised value.
+// Add adds constructors and values to the Psyringe. It returns an error if any
+// pair of constructors and values have the same injection type. See package
+// documentation for definition of "injection type".
 //
-// Add returns an error if any pair of constructors and values have the same
-// injection type. See package documentation for definition of "injection type".
-func (s *Psyringe) Add(things ...interface{}) error {
+// Add uses reflection to determine whether each passed value is a constructor
+// or not. For each constructor, it then generates a generic function in terms
+// of reflect.Values ready to be used by a call to Inject. As such, Add is a
+// relatively expensive call. See Clone for how to avoid calling Add too often.
+func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
 	s.initOnce.Do(s.init)
-	for i, thing := range things {
+	for i, thing := range constructorsAndValues {
 		if thing == nil {
-			return fmt.Errorf("Fill passed nil as argument %d", i)
+			return fmt.Errorf("cannot add nil (argument %d)", i)
 		}
 		if err := s.add(thing); err != nil {
 			return err
@@ -167,39 +164,61 @@ func (s *Psyringe) Add(things ...interface{}) error {
 }
 
 // MustAdd wraps Add and panics if Add returns an error.
-func (s *Psyringe) MustAdd(ctorsAndValues ...interface{}) {
-	if err := s.Add(ctorsAndValues); err != nil {
+func (s *Psyringe) MustAdd(constructorsAndValues ...interface{}) {
+	if err := s.Add(constructorsAndValues); err != nil {
 		panic(err)
 	}
 }
 
-// Clone returns a clone of this Psyringe with all the reflection already
-// performed, and all of the constructed values removed, ready to Inject again.
-// Any non-constructor values passed into the original psyringe will still be
-// there in the clone. (Not yet implemented.)
+// Clone returns a bytewise clone of this Psyringe.
+//
+// Clone exists to provide efficiency by allowing you to Add constructors and
+// values once, and then invoke them multiple times for different instances.
+// This is especially important in long-running applications where the cost of
+// calling Add repeatedly may get expensive.
 func (s *Psyringe) Clone() *Psyringe {
 	panic("Clone is not yet implemented")
 }
 
 // SetDebugFunc allows you to pass a debug function which will be sent debug
-// level logs. The debug function has the same signature as log.Println from the
-// standard library, so you could pass that if you wanted.
-func (s *Psyringe) SetDebugFunc(f func(...interface{})) { s.debug = f }
+// level logs. The debug function has the same signature and semantics as
+// log.Println from the standard library. If SetDebugFunc is not called, all
+// debug messages are passed to a noop.
+//
+// If you pass nil, SetDebugFunc will revert to using the noop.
+func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
+	if f != nil {
+		s.debug = f
+	} else {
+		s.debug = noopDebug
+	}
+}
 
 // SetDebugfFunc allows you to pass a debug function which will be sent debug
-// level logs. The debug function has the same signature as log.Printf from the
-// standard library, so you could pass that if you wanted.
-func (s *Psyringe) SetDebugfFunc(f func(string, ...interface{})) { s.debugf = f }
+// level logs. The debug function has the same signature and semantics as
+// log.Printf from the standard library. If SetDebugfFunc is not called, all
+// debug messages are passed to a noop.
+//
+// If you pass nil, SetDebugfFunc will revert to using the noop.
+func (s *Psyringe) SetDebugfFunc(f func(string, ...interface{})) {
+	if f != nil {
+		s.debugf = f
+	} else {
+		s.debugf = noopDebugf
+	}
+}
 
 // Inject takes a list of targets, which must be pointers to struct types. It
 // tries to inject a value for each field in each target, if a value is known
 // for that field's type. All targets, and all fields in each target, are
-// resolved concurrently.
+// resolved concurrently where the graph allows. In the instance that the
+// Psyringe knows no injection type for a given field's type, that field is
+// passed over, leaving it with whatever value it already had.
 //
 // See package documentation for details on how the Psyringe injects values.
 func (s *Psyringe) Inject(targets ...interface{}) error {
 	if s.values == nil {
-		return fmt.Errorf("Inject called before Fill")
+		return fmt.Errorf("not initialised; call Add before Inject")
 	}
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))
@@ -229,9 +248,8 @@ func (s *Psyringe) MustInject(targets ...interface{}) {
 }
 
 // Test checks that all constructors' parameters are satisfied within this
-// Psyringe. It does not invoke those constructors, it only checks that the
-// structure is valid. If any constructor parameters are not satisfiable, an
-// error is returned. This func should only be used in tests.
+// Psyringe. This method should be used in your own tests to ensure you have a
+// complete graph; it should not be used outside of tests.
 func (s *Psyringe) Test() error {
 	for _, c := range s.ctors {
 		if err := c.testParametersAreRegisteredIn(s); err != nil {
@@ -258,9 +276,9 @@ func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 	return nil
 }
 
-// inject just tries to inject a value for each field, no errors if it doesn't
-// know how to inject a value for the field's type, , as maybe those other
-// fields are just not meant to receive injected values from this Psyringe.
+// inject just tries to inject a value for each field in target, no errors if it
+// doesn't know how to inject a value for a given field's type, those fields are
+// just left as-is.
 func (s *Psyringe) inject(target interface{}) error {
 	v := reflect.ValueOf(target)
 	ptr := v.Type()
@@ -307,7 +325,7 @@ func (s *Psyringe) add(thing interface{}) error {
 		what = "constructor for " + c.outType.Name()
 		err = s.addCtor(c)
 	} else {
-		what = "fully realised value"
+		what = "fully realised value " + fmt.Sprint(thing)
 		err = s.addValue(t, v)
 	}
 	if err != nil {

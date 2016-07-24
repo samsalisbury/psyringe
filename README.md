@@ -3,9 +3,12 @@
 Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
 ```go
-psyringe.Fill(ValuesAndConstructors...)
+p, err := psyringe.New(ValuesAndConstructors...)
+if err != nil {
+	panic(err)
+}
 target := SomeThing{}
-psyringe.Inject(&target)
+p.Inject(&target)
 ```
 
 See a [simple usage example], below.
@@ -19,7 +22,7 @@ See a [simple usage example], below.
 
 - **[Concurrent, lazy initialisation]:** with no extra work on your part.
 - **[No tags]:** keep your code clean and readable.
-- **[Simple API]:** usually only needs two calls: `psyringe.Fill()` and `psyringe.Inject()`
+- **[Simple API]:** usually only needs two calls: `p := psyringe.MustNew()` and `p.Inject()`
 - **[Supports advanced use cases]:** e.g. [scopes], [named instances], [debugging]
 
 [Concurrent, lazy initialisation]: #concurrent-and-lazy
@@ -49,9 +52,9 @@ type (
     FlyingSaucer struct { MainGun Cannon }
 )
 
-psyringe.Fill(NewCannon, NewLaser, NewCog, NewBanana)
+p := psyringe.MustNew(NewCannon, NewLaser, NewCog, NewBanana)
 ufo := FlyingSaucer{}
-psyringe.Inject(&ufo)
+p.Inject(&ufo)
 ```
 
 ### No Tags
@@ -60,7 +63,7 @@ Unlike most dependency injectors for Go, this one does not require you to litter
 
 ### Simple API
 
-Psyringe follows through on its metaphor. You `Fill` the psyringe with things, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like scoping yourself. For example, you can create multiple psyringes and have each of them inject different dependencies into the same struct.
+Psyringe follows through on its metaphor. You `Add` things to the psyringe, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like scoping yourself. For example, you can create multiple psyringes and have each of them inject different dependencies into the same struct.
 
 ### Advanced Uses
 
@@ -74,7 +77,8 @@ psyringe is a _parallel syringe_ which automatically injects multiple values sim
 
 ## Usage
 
-Call `psyringe.Fill(...)` to add values and constructors to the psyringe. Then, call `psyringe.Inject(...)` to inject those values into structs which need them.
+Create a new psyringe with `p := psyringe.MustNew` passing in constructors and other values.
+Then, call `p.Inject(...)` to inject those values into structs with correspondingly typed fields.
 
 ### Simple Usage Example
 
@@ -216,7 +220,7 @@ Likewise, if the constructor is successfully invoked, but returns a non-nil erro
 
 #### Injection Types
 
-Values and constructors passed into a psyringe have an implicit **_injection type_** which is the type of value that thing represents. For non-constructor values, the injection type is the type of the value passed into the psyringe. For constructors, it is the type of the first output (return) value. It is important to understand this concept, since a single psyringe can have only one value or constructor per injection type. `Fill` will return an error if you try to register multiple values and/or constructors that resolve to the same injection type.
+Values and constructors passed into a psyringe have an implicit **_injection type_** which is the type of value that thing represents. For non-constructor values, the injection type is the type of the value passed into the psyringe. For constructors, it is the type of the first output (return) value. It is important to understand this concept, since a single psyringe can have only one value or constructor per injection type. `Add` will return an error if you try to register multiple values and/or constructors that resolve to the same injection type.
 
 #### Constructors
 
