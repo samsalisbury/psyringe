@@ -11,7 +11,7 @@ import (
 type named string
 
 func TestFill_Success(t *testing.T) {
-	err := New().Fill(
+	_, err := New(
 
 		// objects
 		//
@@ -37,8 +37,8 @@ func TestFill_Success(t *testing.T) {
 
 func TestFill_AlreadyRegisteredError(t *testing.T) {
 	e := func(a, b interface{}, expectedInjectionType string) {
-		err := New().Fill(a, b)
-		what := fmt.Sprintf("Fill(%T, %T)", a, b)
+		_, err := New(a, b)
+		what := fmt.Sprintf("New(%T, %T)", a, b)
 		if err == nil {
 			t.Errorf("nil error for %s", what)
 		}

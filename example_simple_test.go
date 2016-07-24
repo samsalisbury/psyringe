@@ -26,9 +26,9 @@ func (c Command) Print() {
 	fmt.Printf("User: %s, Host: %s, Load average: %.2f", c.User, c.Host, c.Load)
 }
 
-func ExampleSyringe_Simple() {
+func ExampleSyringe_simple() {
 	s := psyringe.Psyringe{}
-	if err := s.Fill(NewUsername, NewHostname, NewLoadAverage); err != nil {
+	if err := s.Add(NewUsername, NewHostname, NewLoadAverage); err != nil {
 		log.Fatal(err)
 	}
 	command := Command{}

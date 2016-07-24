@@ -10,15 +10,14 @@ func TestTest(t *testing.T) {
 
 	newString := func() string { return "" }
 	newInt := func() (int, error) { return 1, nil }
-
 	newStructPtr := func(s string, b float64, i int) *struct{} { return nil }
 
-	s := psyringe.New()
+	s, err := psyringe.New(newString, newInt, newStructPtr)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	s.Fill(newString, newInt, newStructPtr)
-
-	err := s.Test()
-
+	err = s.Test()
 	if err == nil {
 		t.Fatalf("expected an error, got nil")
 	}
@@ -29,5 +28,4 @@ func TestTest(t *testing.T) {
 	if actual != expected {
 		t.Errorf("\ngot  %q\nwant %q", actual, expected)
 	}
-
 }

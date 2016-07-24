@@ -17,8 +17,8 @@ type dependent struct {
 }
 
 func TestInject_Objects(t *testing.T) {
-	s := psyringe.New()
-	if err := s.Fill(1, "hello", bytes.NewBuffer([]byte("world"))); err != nil {
+	s, err := psyringe.New(1, "hello", bytes.NewBuffer([]byte("world")))
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -43,8 +43,8 @@ func TestInject_Constructors(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s := psyringe.New()
-	if err := s.Fill(newInt, newString, newBuffer); err != nil {
+	s, err := psyringe.New(newInt, newString, newBuffer)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -69,8 +69,8 @@ func TestInject_Mixed(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s := psyringe.New()
-	if err := s.Fill(newBuffer, 100, newString); err != nil {
+	s, err := psyringe.New(newBuffer, 100, newString)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -96,14 +96,14 @@ func TestInject_CustomErrors(t *testing.T) {
 		return "", fmt.Errorf("an error")
 	}
 
-	s := psyringe.New()
-	if err := s.Fill(newString); err != nil {
+	s, err := psyringe.New(newString)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	d := dependent{}
 
-	err := s.Inject(&d)
+	err = s.Inject(&d)
 	if err == nil {
 		t.Fatal("constructor error not returned")
 	}
@@ -169,8 +169,8 @@ func TestInject_DependencyTree(t *testing.T) {
 		return originalBufferRef
 	}
 
-	s := psyringe.New()
-	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
+	s, err := psyringe.New(newDependent, newString, newInt, newBuffer)
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -239,14 +239,14 @@ func TestInject_DependencyTree_Errors(t *testing.T) {
 		return bytes.NewBuffer([]byte("yes"))
 	}
 
-	s := psyringe.New()
-	if err := s.Fill(newDependent, newString, newInt, newBuffer); err != nil {
+	s, err := psyringe.New(newDependent, newString, newInt, newBuffer)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	d := dependsOnDependent{}
 
-	err := s.Inject(&d)
+	err = s.Inject(&d)
 	if err == nil {
 		t.Fatalf("expected an error from newString")
 	}
