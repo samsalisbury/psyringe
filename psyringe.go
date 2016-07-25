@@ -43,11 +43,11 @@ values, channelling values of each injection type into the relevant parameter
 of any constructors which require it, and ultimately into any fields of that
 type in the target struct which require it.
 
-For a given Psyringe, each constructor can be called at most once. After that,
+For a given Psyringe, each constructor will be called at most once. After that,
 the generated value is provided directly without calling the constructor again.
-Thus every value in a psyringe is effectively a singleton. The Clone method
+Thus every value in a Psyringe is effectively a singleton. The Clone method
 allows taking snapshots of a Psyringe in order to re-use its constructor graph
-whilst generating new values; and it is idiomatic to use multiple Psyringes with
+whilst generating new values. It is idiomatic to use multiple Psyringes with
 differing scopes to inject different fields into the same object.
 */
 package psyringe
@@ -59,15 +59,13 @@ import (
 )
 
 type (
-	// A Psyringe holds a collection of constructors and fully realised values
-	// which can be injected into structs which depend on them.
+	// Psyringe is a dependency injection container.
 	Psyringe struct {
 		initOnce       *sync.Once
 		values         map[reflect.Type]reflect.Value
 		ctors          map[reflect.Type]*ctor
 		injectionTypes map[reflect.Type]struct{}
 		debug          func(...interface{})
-		debugf         func(string, ...interface{})
 	}
 	// ctor is a constructor for a single value.
 	ctor struct {
@@ -79,17 +77,18 @@ type (
 		value     *reflect.Value
 	}
 	// NoConstructorOrValue is an error returned when Psyringe has no way of
-	// injecting a value of a specific type into one of its constructors, due to
-	// no constructor or value of that injection type being put into the
-	// Psyringe.
+	// getting a value of a specific type when needed, e.g. when attempting to
+	// invoke another of its constructors that has a parameter of that type.
 	NoConstructorOrValue struct {
 		// ForType is the type for which no constructor or value is available.
 		ForType reflect.Type
 		// ConstructorType is the type of the constructor function requiring a
-		// value of type ForType.
+		// value of type ForType. This field is nil unless the error was caused
+		// by trying to invoke a constructor.
 		ConstructorType *reflect.Type
 		// ConstructorParamIndex is the zero-based index of the first parameter
-		// in ConstructorType of type ForType.
+		// in ConstructorType of type ForType. This field is nil unless the
+		// error was caused by trying to invoke a constructor.
 		ConstructorParamIndex *int
 	}
 )
@@ -143,10 +142,7 @@ func (s *Psyringe) init() {
 	if s.debug == nil {
 		s.debug = noopDebug
 	}
-	if s.debugf == nil {
-		s.debugf = noopDebugf
-	}
-	s.debugf("Psyringe %v initialised.", s)
+	s.debug("Psyringe %v initialised.", s)
 }
 
 // Add adds constructors and values to the Psyringe. It returns an error if any
@@ -206,30 +202,16 @@ func (c ctor) clone() *ctor {
 }
 
 // SetDebugFunc allows you to pass a debug function which will be sent debug
-// level logs. The debug function has the same signature and semantics as
-// log.Println from the standard library. If SetDebugFunc is not called, all
-// debug messages are passed to a noop.
+// level logs. The debug function has the same signature as log.Println from the
+// standard library.
 //
-// If you pass nil, will revert to using the noop.
+// If you do not call SetDebugFunc, or if
+// you pass it nil, debug messages will be ignored.
 func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 	if f != nil {
 		s.debug = f
 	} else {
 		s.debug = noopDebug
-	}
-}
-
-// SetDebugfFunc allows you to pass a debug function which will be sent debug
-// level logs. The debug function has the same signature and semantics as
-// log.Printf from the standard library. If SetDebugfFunc is not called, all
-// debug messages are passed to a noop.
-//
-// If you pass nil, will revert to using the noop.
-func (s *Psyringe) SetDebugfFunc(f func(string, ...interface{})) {
-	if f != nil {
-		s.debugf = f
-	} else {
-		s.debugf = noopDebugf
 	}
 }
 
@@ -256,10 +238,10 @@ func (s *Psyringe) Inject(targets ...interface{}) error {
 		go func(target interface{}) {
 			defer wg.Done()
 			if err := s.inject(target); err != nil {
-				s.debugf("error injecting into %T: %s", target, err)
+				s.debug("error injecting into %T: %s", target, err)
 				errs <- err
 			}
-			s.debugf("finished injecting into %T", target)
+			s.debug("finished injecting into %T", target)
 		}(t)
 	}
 	return <-errs
@@ -273,8 +255,8 @@ func (s *Psyringe) MustInject(targets ...interface{}) {
 }
 
 // Test checks that all constructors' parameters are satisfied within this
-// Psyringe. This method should be used in your own tests to ensure you have a
-// complete graph; it should not be used outside of tests.
+// Psyringe. This method can be used in your own tests to ensure you have a
+// complete graph.
 func (s *Psyringe) Test() error {
 	for _, c := range s.ctors {
 		if err := c.testParametersAreRegisteredIn(s); err != nil {
@@ -330,9 +312,9 @@ func (s *Psyringe) inject(target interface{}) error {
 			defer wg.Done()
 			if fv, err := s.getValue(f.Type()); err == nil {
 				f.Set(fv)
-				s.debugf("populated %s.%s with %v", t, fieldName, fv)
+				s.debug("populated %s.%s with %v", t, fieldName, fv)
 			} else if _, ok := err.(NoConstructorOrValue); ok {
-				s.debugf("not populating %s.%s: %s", t, fieldName, err)
+				s.debug("not populating %s.%s: %s", t, fieldName, err)
 			} else {
 				errs <- err
 			}
@@ -354,9 +336,9 @@ func (s *Psyringe) add(thing interface{}) error {
 		err = s.addValue(t, v)
 	}
 	if err != nil {
-		s.debugf("error adding %s (%T): %s", what, thing, err)
+		s.debug("error adding %s (%T): %s", what, thing, err)
 	} else {
-		s.debugf("added %s (%T)", what, thing)
+		s.debug("added %s (%T)", what, thing)
 	}
 	return err
 }
