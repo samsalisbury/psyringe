@@ -1,5 +1,10 @@
 TODO:
 
+	- Add CircleCI build
+	- Add Coveralls build
+	- Add GoDoc link
+	- Add examples for: New, Add, Clone, Inject
+
 	- Make injection more efficient.
 	  (The benchmarks imply this is relatively expensive still, may be
       worth caching injection plan per target type, for use in cloned
