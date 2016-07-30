@@ -60,7 +60,6 @@ import (
 
 // Psyringe is a dependency injection container.
 type Psyringe struct {
-	initOnce       *sync.Once
 	values         map[reflect.Type]reflect.Value
 	ctors          map[reflect.Type]*ctor
 	injectionTypes map[reflect.Type]struct{}
@@ -74,7 +73,12 @@ var (
 // New creates a new Psyringe, and adds the provided constructors and values to
 // it. It returns an error if Add returns an error. See Add for more details.
 func New(constructorsAndValues ...interface{}) (*Psyringe, error) {
-	p := &Psyringe{}
+	p := &Psyringe{
+		values:         map[reflect.Type]reflect.Value{},
+		ctors:          map[reflect.Type]*ctor{},
+		injectionTypes: map[reflect.Type]struct{}{},
+		debug:          noopDebug,
+	}
 	return p, p.Add(constructorsAndValues...)
 }
 
@@ -90,21 +94,6 @@ func MustNew(constructorsAndValues ...interface{}) *Psyringe {
 func noopDebug(...interface{})          {}
 func noopDebugf(string, ...interface{}) {}
 
-// init is called exactly once, and makes sure the Psyringe itself, as well as
-// maps and debug funcs are not nil.
-func (s *Psyringe) init() {
-	if s == nil {
-		*s = Psyringe{}
-	}
-	s.values = map[reflect.Type]reflect.Value{}
-	s.ctors = map[reflect.Type]*ctor{}
-	s.injectionTypes = map[reflect.Type]struct{}{}
-	if s.debug == nil {
-		s.debug = noopDebug
-	}
-	s.debug("Psyringe %v initialised.", s)
-}
-
 // Add adds constructors and values to the Psyringe. It returns an error if any
 // pair of constructors and values have the same injection type. See package
 // documentation for definition of "injection type".
@@ -114,10 +103,6 @@ func (s *Psyringe) init() {
 // of reflect.Values ready to be used by a call to Inject. As such, Add is a
 // relatively expensive call. See Clone for how to avoid calling Add too often.
 func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
-	if s.initOnce == nil {
-		s.initOnce = &sync.Once{}
-	}
-	s.initOnce.Do(s.init)
 	for i, thing := range constructorsAndValues {
 		if thing == nil {
 			return fmt.Errorf("cannot add nil (argument %d)", i)
