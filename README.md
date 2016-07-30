@@ -1,4 +1,4 @@
-# psyringe [![CircleCI](https://circleci.com/gh/samsalisbury/psyringe/tree/master.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe/tree/master)
+# psyringe [![CircleCI](https://circleci.com/gh/samsalisbury/psyringe.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe) [![GoDoc](https://img.shields.io/badge/GoDoc-Documented-blue.svg)](https://godoc.org/github.com/samsalisbury/psyringe)
 
 Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
@@ -11,12 +11,13 @@ target := SomeThing{}
 p.Inject(&target)
 ```
 
-See a [simple usage example], below.
+See a [simple usage example], below. Fully [documented at GoDoc.org].
 
 [lazy]: https://en.wikipedia.org/wiki/Lazy_initialization
 [dependency injector]: https://en.wikipedia.org/wiki/Dependency_injection
 [Go]: https://golang.org
 [simple usage example]: #simple-usage-example
+[documented at GoDoc.org]: https://godoc.org/github.com/samsalisbury/psyringe
 
 ## Features
 
@@ -185,17 +186,17 @@ Values and constructors passed into a psyringe have an implicit **_injection typ
 
 Constructors can take 2 different forms:
 
-1. `func (...Anything) Anything`
-2. `func (...Anything) (Anything, error)`
+1. `func(...Anything) Anything`
+2. `func(...Anything) (Anything, error)`
 
 Just to clarify: `Anything` means literally any type, and in the signatures above can have a different value each time it is seen. For example, all of the following types are considered to be constructors:
 
-- func() int
-- func() (int, error)
-- func(int) int
-- func(int) (int, error) 
-- func (string, io.Reader, io.Writer) interface{}
-- func (string, io.Reader, io.Writer) (interface{}, error)
+    func() int
+    func() (int, error)
+    func(int) int
+    func(int) (int, error) 
+    func(string, io.Reader, io.Writer) interface{}
+    func(string, io.Reader, io.Writer) (interface{}, error)
 
 If you need to inject a function which has a constructor's signature, you'll need to create a constructor that returns that function. For example, for an value with injection type `func(int) (int, error)`, you would need to create a func to return that:
 
@@ -206,5 +207,4 @@ newFunc() func(int) (int, error) {
 ```
 
 ===
-
-License: [MIT](./LICENSE)
+Copyright (c) 2016 Sam Salisbury; [License MIT](./LICENSE)
