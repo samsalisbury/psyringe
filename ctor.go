@@ -21,12 +21,6 @@ func newCtor(t reflect.Type, v reflect.Value) *ctor {
 	if t.Kind() != reflect.Func || t.IsVariadic() {
 		return nil
 	}
-	if v.IsNil() {
-		panic("psyringe internal error: tryMakeCtor received a nil value")
-	}
-	if !v.IsValid() {
-		panic("psyringe internal error: tryMakeCtor received a zero Value value")
-	}
 	numOut := t.NumOut()
 	if numOut == 0 || numOut > 2 || (numOut == 2 && t.Out(1) != terror) {
 		return nil
