@@ -88,6 +88,25 @@ func TestPsyringe_Inject_mixed(t *testing.T) {
 	}
 }
 
+var uninjectables = map[string]interface{}{
+	"got a int; want a pointer":           1,
+	"got a *int, but int is not a struct": new(int),
+	"got a *struct {}, but it was nil":    ((*struct{})(nil)),
+}
+
+func TestPsyringe_Inject_uninjectable(t *testing.T) {
+	for expected, uninjectable := range uninjectables {
+		err := MustNew().Inject(uninjectable)
+		if err == nil {
+			t.Errorf("got nil; want error %q", expected)
+		}
+		actual := err.Error()
+		if actual != expected {
+			t.Errorf("got error %q; want %q", actual, expected)
+		}
+	}
+}
+
 func TestPsyringe_Inject_customErrors(t *testing.T) {
 	newString := func() (string, error) {
 		return "", fmt.Errorf("an error")
@@ -217,7 +236,7 @@ func TestPsyringe_Inject_dependencyTree(t *testing.T) {
 	}
 }
 
-func TestPsyringe_Inject_dependencyTree_Errors(t *testing.T) {
+func TestPsyringe_Inject_dependencyTreeErrors(t *testing.T) {
 	// Here are 4 constructors. One of them returns an error...
 	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
 		return dependent{
