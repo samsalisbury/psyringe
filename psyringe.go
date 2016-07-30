@@ -399,9 +399,6 @@ func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 }
 
 func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
-	if c.value != nil {
-		return *c.value, nil
-	}
 	go c.once.Do(func() {
 		defer close(c.errChan)
 		wg := sync.WaitGroup{}
