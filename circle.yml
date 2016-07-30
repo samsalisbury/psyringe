@@ -1,0 +1,5 @@
+test:
+  override:
+    - go test -v -race -cover -covermode atomic -outputdir "$CIRCLE_ARTIFACTS" -coverprofile coverage.txt  
+  post:
+    - bash <(curl -s https://codecov.io/bash)
