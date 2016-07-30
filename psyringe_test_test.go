@@ -23,7 +23,7 @@ func TestTest(t *testing.T) {
 	}
 
 	actual := err.Error()
-	expected := "unable to construct *struct {} (missing param 1): no constructor or value for float64"
+	expected := "injection type float64 not known (calling constructor func(string, float64, int) *struct {})"
 
 	if actual != expected {
 		t.Errorf("\ngot  %q\nwant %q", actual, expected)

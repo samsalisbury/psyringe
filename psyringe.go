@@ -69,7 +69,8 @@ type (
 	}
 	// ctor is a constructor for a single value.
 	ctor struct {
-		outType   reflect.Type
+		outType,
+		funcType reflect.Type
 		inTypes   []reflect.Type
 		construct func(in []reflect.Value) (reflect.Value, error)
 		errChan   chan error
@@ -85,26 +86,17 @@ type (
 		// ConstructorType is the type of the constructor function requiring a
 		// value of type ForType. This field is nil unless the error was caused
 		// by trying to invoke a constructor.
-		ConstructorType *reflect.Type
+		ConstructorType reflect.Type
 		// ConstructorParamIndex is the zero-based index of the first parameter
 		// in ConstructorType of type ForType. This field is nil unless the
 		// error was caused by trying to invoke a constructor.
-		ConstructorParamIndex *int
+		ConstructorParamIndex int
 	}
 )
 
 func (e NoConstructorOrValue) Error() string {
-	message := ""
-	if e.ConstructorType != nil {
-		message += fmt.Sprintf("unable to construct %s", *e.ConstructorType)
-	}
-	if e.ConstructorParamIndex != nil {
-		message += fmt.Sprintf(" (missing param %d)", *e.ConstructorParamIndex)
-	}
-	if message != "" {
-		message += ": "
-	}
-	return message + fmt.Sprintf("no constructor or value for %s", e.ForType)
+	return fmt.Sprintf("injection type %s not known (calling constructor %s)",
+		e.ForType, e.ConstructorType)
 }
 
 var (
@@ -171,7 +163,7 @@ func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
 
 // MustAdd wraps Add and panics if Add returns an error.
 func (s *Psyringe) MustAdd(constructorsAndValues ...interface{}) {
-	if err := s.Add(constructorsAndValues); err != nil {
+	if err := s.Add(constructorsAndValues...); err != nil {
 		panic(err)
 	}
 }
@@ -276,8 +268,8 @@ func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 		}
 		return NoConstructorOrValue{
 			ForType:               paramType,
-			ConstructorParamIndex: &paramIndex,
-			ConstructorType:       &c.outType,
+			ConstructorParamIndex: paramIndex,
+			ConstructorType:       c.funcType,
 		}
 	}
 	return nil
@@ -310,12 +302,10 @@ func (s *Psyringe) inject(target interface{}) error {
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, fieldName string) {
 			defer wg.Done()
-			if fv, err := s.getValue(f.Type()); err == nil {
+			if fv, ok, err := s.getValueForStructField(f.Type()); ok && err == nil {
 				f.Set(fv)
 				s.debug("populated %s.%s with %v", t, fieldName, fv)
-			} else if _, ok := err.(NoConstructorOrValue); ok {
-				s.debug("not populating %s.%s: %s", t, fieldName, err)
-			} else {
+			} else if err != nil {
 				errs <- err
 			}
 		}(v.Elem().Field(i), t.Field(i).Name)
@@ -343,13 +333,29 @@ func (s *Psyringe) add(thing interface{}) error {
 	return err
 }
 
-func (s *Psyringe) getValue(t reflect.Type) (reflect.Value, error) {
+func (s *Psyringe) getValueForStructField(t reflect.Type) (reflect.Value, bool, error) {
+	if v, ok := s.values[t]; ok {
+		return v, true, nil
+	}
+	c, ok := s.ctors[t]
+	if !ok {
+		return reflect.Value{}, false, nil
+	}
+	v, err := c.getValue(s)
+	return v, true, err
+}
+
+func (s *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
 	if v, ok := s.values[t]; ok {
 		return v, nil
 	}
 	c, ok := s.ctors[t]
 	if !ok {
-		return reflect.Value{}, NoConstructorOrValue{ForType: t}
+		return reflect.Value{}, NoConstructorOrValue{
+			ConstructorType:       forCtor.funcType,
+			ConstructorParamIndex: paramIndex,
+			ForType:               t,
+		}
 	}
 	return c.getValue(s)
 }
@@ -390,6 +396,7 @@ func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 		return out[0], err
 	}
 	return &ctor{
+		funcType:  t,
 		outType:   outType,
 		inTypes:   inTypes,
 		construct: construct,
@@ -414,10 +421,10 @@ func (c *ctor) manifest(s *Psyringe) {
 	wg.Add(numArgs)
 	args := make([]reflect.Value, numArgs)
 	for i, t := range c.inTypes {
-		i, t := i, t
+		s, c, i, t := s, c, i, t
 		go func() {
 			defer wg.Done()
-			v, err := s.getValue(t)
+			v, err := s.getValueForConstructor(c, i, t)
 			if err != nil {
 				c.errChan <- err
 			}
