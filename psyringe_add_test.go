@@ -107,3 +107,15 @@ func TestPsyringe_Add_alreadyRegisteredError(t *testing.T) {
 		"interface {}",
 	)
 }
+
+func TestPsyringe_Add_nil(t *testing.T) {
+	expected := "cannot add nil (argument 3)"
+	err := MustNew().Add(1, "", struct{}{}, nil, func(int) interface{} { return nil })
+	if err == nil {
+		t.Fatalf("got nil; want error %q", expected)
+	}
+	actual := err.Error()
+	if actual != expected {
+		t.Fatalf("got error %q; want error %q", actual, expected)
+	}
+}
