@@ -1,20 +1,18 @@
-package psyringe_test
+package psyringe
 
 import (
 	"bytes"
 	"testing"
-
-	"github.com/samsalisbury/psyringe"
 )
 
-func TestPsyringe_Test(t *testing.T) {
+func TestPsyringe_Test_fails(t *testing.T) {
 
 	newString := func() string { return "" }
 	newInt := func() (int, error) { return 1, nil }
 	newStructPtr := func(s string, b float64, i int) *struct{} { return nil }
 	aBuffer := &bytes.Buffer{}
 
-	s, err := psyringe.New(newString, newInt, newStructPtr, aBuffer)
+	s, err := New(newString, newInt, newStructPtr, aBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -29,5 +27,14 @@ func TestPsyringe_Test(t *testing.T) {
 
 	if actual != expected {
 		t.Errorf("\ngot  %q\nwant %q", actual, expected)
+	}
+}
+
+func TestPsyringe_Test_succeeds(t *testing.T) {
+	if err := MustNew().Test(); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	}
+	if err := MustNew(func() int { return 1 }, func(int) string { return "" }).Test(); err != nil {
+		t.Fatalf("unexpected error %q", err)
 	}
 }
