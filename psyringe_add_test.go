@@ -10,7 +10,7 @@ import (
 
 type named string
 
-func TestAdd_Success(t *testing.T) {
+func TestPsyringe_Add_success(t *testing.T) {
 	_, err := New(
 
 		// objects
@@ -35,7 +35,7 @@ func TestAdd_Success(t *testing.T) {
 	}
 }
 
-func TestAdd_AlreadyRegisteredError(t *testing.T) {
+func TestPsyringe_Add_alreadyRegisteredError(t *testing.T) {
 	e := func(a, b interface{}, expectedInjectionType string) {
 		_, err := New(a, b)
 		what := fmt.Sprintf("New(%T, %T)", a, b)

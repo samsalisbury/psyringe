@@ -26,9 +26,6 @@ func TestPsyringe_Clone(t *testing.T) {
 		},
 	)
 
-	//original.SetDebugFunc(log.Println)
-	//original.SetDebugfFunc(log.Printf)
-
 	// Create a couple of clones.
 	clone1 := original.Clone()
 	clone2 := clone1.Clone()

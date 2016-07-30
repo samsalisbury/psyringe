@@ -7,7 +7,7 @@ import (
 	"github.com/samsalisbury/psyringe"
 )
 
-func TestTest(t *testing.T) {
+func TestPsyringe_Test(t *testing.T) {
 
 	newString := func() string { return "" }
 	newInt := func() (int, error) { return 1, nil }

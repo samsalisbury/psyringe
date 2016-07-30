@@ -13,7 +13,7 @@ type dependent struct {
 	Buffer *bytes.Buffer
 }
 
-func TestInject_Objects(t *testing.T) {
+func TestPsyringe_Inject_objects(t *testing.T) {
 	s, err := New(1, "hello", bytes.NewBuffer([]byte("world")))
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestInject_Objects(t *testing.T) {
 	}
 }
 
-func TestInject_Constructors(t *testing.T) {
+func TestPsyringe_Inject_constructors(t *testing.T) {
 	newInt := func() int { return 2 }
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
@@ -62,7 +62,7 @@ func TestInject_Constructors(t *testing.T) {
 	}
 }
 
-func TestInject_Mixed(t *testing.T) {
+func TestPsyringe_Inject_mixed(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
@@ -88,7 +88,7 @@ func TestInject_Mixed(t *testing.T) {
 	}
 }
 
-func TestInject_CustomErrors(t *testing.T) {
+func TestPsyringe_Inject_customErrors(t *testing.T) {
 	newString := func() (string, error) {
 		return "", fmt.Errorf("an error")
 	}
@@ -117,7 +117,7 @@ type dependsOnDependent struct {
 	Dependency dependent
 }
 
-func TestInject_DependencyTree(t *testing.T) {
+func TestPsyringe_Inject_dependencyTree(t *testing.T) {
 	var (
 		// We want to monitor that each constructor is only called
 		// once. Since we know the tree is resolved concurrently where
@@ -217,7 +217,7 @@ func TestInject_DependencyTree(t *testing.T) {
 	}
 }
 
-func TestInject_DependencyTree_Errors(t *testing.T) {
+func TestPsyringe_Inject_dependencyTree_Errors(t *testing.T) {
 	// Here are 4 constructors. One of them returns an error...
 	newDependent := func(i int, s string, b *bytes.Buffer) dependent {
 		return dependent{
