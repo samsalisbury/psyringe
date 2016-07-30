@@ -1,4 +1,4 @@
-# psyringe
+# psyringe [![CircleCI](https://circleci.com/gh/samsalisbury/psyringe/tree/master.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe/tree/master)
 
 Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
