@@ -399,34 +399,37 @@ func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
 }
 
 func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
-	go c.once.Do(func() {
-		defer close(c.errChan)
-		wg := sync.WaitGroup{}
-		numArgs := len(c.inTypes)
-		wg.Add(numArgs)
-		args := make([]reflect.Value, numArgs)
-		for i, t := range c.inTypes {
-			i, t := i, t
-			go func() {
-				defer wg.Done()
-				v, err := s.getValue(t)
-				if err != nil {
-					c.errChan <- err
-				}
-				args[i] = v
-			}()
-		}
-		wg.Wait()
-		v, err := c.construct(args)
-		if err != nil {
-			c.errChan <- err
-		}
-		c.value = &v
-	})
+	go c.once.Do(func() { c.manifest(s) })
 	if err := <-c.errChan; err != nil {
 		return reflect.Value{}, err
 	}
 	return *c.value, nil
+}
+
+// manifest is called exactly once for each constructor to generate its value.
+func (c *ctor) manifest(s *Psyringe) {
+	defer close(c.errChan)
+	wg := sync.WaitGroup{}
+	numArgs := len(c.inTypes)
+	wg.Add(numArgs)
+	args := make([]reflect.Value, numArgs)
+	for i, t := range c.inTypes {
+		i, t := i, t
+		go func() {
+			defer wg.Done()
+			v, err := s.getValue(t)
+			if err != nil {
+				c.errChan <- err
+			}
+			args[i] = v
+		}()
+	}
+	wg.Wait()
+	v, err := c.construct(args)
+	if err != nil {
+		c.errChan <- err
+	}
+	c.value = &v
 }
 
 func (s *Psyringe) addCtor(c *ctor) error {
