@@ -205,3 +205,6 @@ newFunc() func(int) (int, error) {
 }
 ```
 
+===
+
+License: [MIT](./LICENSE)
