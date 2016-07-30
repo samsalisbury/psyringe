@@ -58,45 +58,13 @@ import (
 	"sync"
 )
 
-type (
-	// Psyringe is a dependency injection container.
-	Psyringe struct {
-		initOnce       *sync.Once
-		values         map[reflect.Type]reflect.Value
-		ctors          map[reflect.Type]*ctor
-		injectionTypes map[reflect.Type]struct{}
-		debug          func(...interface{})
-	}
-	// ctor is a constructor for a single value.
-	ctor struct {
-		outType,
-		funcType reflect.Type
-		inTypes   []reflect.Type
-		construct func(in []reflect.Value) (reflect.Value, error)
-		errChan   chan error
-		once      *sync.Once
-		value     *reflect.Value
-	}
-	// NoConstructorOrValue is an error returned when Psyringe has no way of
-	// getting a value of a specific type when needed, e.g. when attempting to
-	// invoke another of its constructors that has a parameter of that type.
-	NoConstructorOrValue struct {
-		// ForType is the type for which no constructor or value is available.
-		ForType reflect.Type
-		// ConstructorType is the type of the constructor function requiring a
-		// value of type ForType. This field is nil unless the error was caused
-		// by trying to invoke a constructor.
-		ConstructorType reflect.Type
-		// ConstructorParamIndex is the zero-based index of the first parameter
-		// in ConstructorType of type ForType. This field is nil unless the
-		// error was caused by trying to invoke a constructor.
-		ConstructorParamIndex int
-	}
-)
-
-func (e NoConstructorOrValue) Error() string {
-	return fmt.Sprintf("injection type %s not known (calling constructor %s)",
-		e.ForType, e.ConstructorType)
+// Psyringe is a dependency injection container.
+type Psyringe struct {
+	initOnce       *sync.Once
+	values         map[reflect.Type]reflect.Value
+	ctors          map[reflect.Type]*ctor
+	injectionTypes map[reflect.Type]struct{}
+	debug          func(...interface{})
 }
 
 var (
@@ -187,12 +155,6 @@ func (s *Psyringe) Clone() *Psyringe {
 	return &p
 }
 
-func (c ctor) clone() *ctor {
-	c.once = &sync.Once{}
-	c.errChan = make(chan error)
-	return &c
-}
-
 // SetDebugFunc allows you to pass a debug function which will be sent debug
 // level logs. The debug function has the same signature as log.Println from the
 // standard library.
@@ -258,23 +220,6 @@ func (s *Psyringe) Test() error {
 	return nil
 }
 
-func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
-	for paramIndex, paramType := range c.inTypes {
-		if _, constructorExists := s.ctors[paramType]; constructorExists {
-			continue
-		}
-		if _, valueExists := s.values[paramType]; valueExists {
-			continue
-		}
-		return NoConstructorOrValue{
-			ForType:               paramType,
-			ConstructorParamIndex: paramIndex,
-			ConstructorType:       c.funcType,
-		}
-	}
-	return nil
-}
-
 // inject just tries to inject a value for each field in target, no errors if it
 // doesn't know how to inject a value for a given field's type, those fields are
 // just left as-is.
@@ -318,7 +263,7 @@ func (s *Psyringe) add(thing interface{}) error {
 	t := v.Type()
 	var err error
 	var what string
-	if c := s.tryMakeCtor(t, v); c != nil {
+	if c := newCtor(t, v); c != nil {
 		what = "constructor for " + c.outType.Name()
 		err = s.addCtor(c)
 	} else {
@@ -358,85 +303,6 @@ func (s *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t refle
 		}
 	}
 	return c.getValue(s)
-}
-
-func (s *Psyringe) tryMakeCtor(t reflect.Type, v reflect.Value) *ctor {
-	if t.Kind() != reflect.Func || t.IsVariadic() {
-		return nil
-	}
-	if v.IsNil() {
-		panic("psyringe internal error: tryMakeCtor received a nil value")
-	}
-	if !v.IsValid() {
-		panic("psyringe internal error: tryMakeCtor received a zero Value value")
-	}
-	numOut := t.NumOut()
-	if numOut == 0 || numOut > 2 || (numOut == 2 && t.Out(1) != terror) {
-		return nil
-	}
-	outType := t.Out(0)
-	numIn := t.NumIn()
-	inTypes := make([]reflect.Type, numIn)
-	for i := range inTypes {
-		inTypes[i] = t.In(i)
-	}
-	construct := func(in []reflect.Value) (reflect.Value, error) {
-		for i, arg := range in {
-			if !arg.IsValid() {
-				return reflect.Value{},
-					fmt.Errorf("unable to create arg %d (%s) of %s constructor",
-						i, inTypes[i], outType)
-			}
-		}
-		out := v.Call(in)
-		var err error
-		if len(out) == 2 && !out[1].IsNil() {
-			err = out[1].Interface().(error)
-		}
-		return out[0], err
-	}
-	return &ctor{
-		funcType:  t,
-		outType:   outType,
-		inTypes:   inTypes,
-		construct: construct,
-		errChan:   make(chan error),
-		once:      &sync.Once{},
-	}
-}
-
-func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
-	go c.once.Do(func() { c.manifest(s) })
-	if err := <-c.errChan; err != nil {
-		return reflect.Value{}, err
-	}
-	return *c.value, nil
-}
-
-// manifest is called exactly once for each constructor to generate its value.
-func (c *ctor) manifest(s *Psyringe) {
-	defer close(c.errChan)
-	wg := sync.WaitGroup{}
-	numArgs := len(c.inTypes)
-	wg.Add(numArgs)
-	args := make([]reflect.Value, numArgs)
-	for i, t := range c.inTypes {
-		s, c, i, t := s, c, i, t
-		go func() {
-			defer wg.Done()
-			v, err := s.getValueForConstructor(c, i, t)
-			if err != nil {
-				c.errChan <- err
-			}
-			args[i] = v
-		}()
-	}
-	wg.Wait()
-	v, err := c.construct(args)
-	if err != nil {
-		c.errChan <- err
-	}
-	c.value = &v
 }
 
 func (s *Psyringe) addCtor(c *ctor) error {
