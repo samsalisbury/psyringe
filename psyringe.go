@@ -62,12 +62,7 @@ type Psyringe struct {
 	values         map[reflect.Type]reflect.Value
 	ctors          map[reflect.Type]*ctor
 	injectionTypes map[reflect.Type]struct{}
-	debug          func(...interface{})
 }
-
-var (
-	noopDebug = func(...interface{}) {}
-)
 
 // New creates a new Psyringe, and adds the provided constructors and values to
 // it. New will panic if any two arguments have the same injection type. See
@@ -87,7 +82,6 @@ func NewErr(constructorsAndValues ...interface{}) (*Psyringe, error) {
 		values:         map[reflect.Type]reflect.Value{},
 		ctors:          map[reflect.Type]*ctor{},
 		injectionTypes: map[reflect.Type]struct{}{},
-		debug:          noopDebug,
 	}
 	return p, errors.Wrap(p.AddErr(constructorsAndValues...), "Add failed")
 }
@@ -148,19 +142,6 @@ func (p *Psyringe) Clone() *Psyringe {
 	return &q
 }
 
-// SetDebugFunc allows you to pass a debug function which will be sent debug
-// level logs. The debug function has the same signature as log.Println from the
-// standard library.
-//
-// If you do not call SetDebugFunc, or if you pass it nil, debug messages will
-// be ignored.
-func (p *Psyringe) SetDebugFunc(f func(...interface{})) {
-	if f == nil {
-		f = noopDebug
-	}
-	p.debug = f
-}
-
 // Inject takes a list of targets, which must be pointers to structs. It
 // tries to inject a value for each field in each target, if a value is known
 // for that field's type. All targets, and all fields in each target, are
@@ -183,7 +164,6 @@ func (p *Psyringe) Inject(targets ...interface{}) error {
 			if err := p.inject(target); err != nil {
 				errs <- errors.Wrapf(err, "inject into %T target failed", target)
 			}
-			p.debug("finished injecting into %T", target)
 		}(t)
 	}
 	return <-errs
@@ -237,7 +217,6 @@ func (p *Psyringe) inject(target interface{}) error {
 			defer wg.Done()
 			if fv, ok, err := p.getValueForStructField(f.Type(), fieldName); ok && err == nil {
 				f.Set(fv)
-				p.debug(fmt.Sprintf("populated %s.%s with %v", t, fieldName, fv))
 			} else if err != nil {
 				errs <- err
 			}
@@ -285,7 +264,6 @@ func (p *Psyringe) registerInjectionType(t reflect.Type) error {
 		return fmt.Errorf("injection type %s already registered", t)
 	}
 	p.injectionTypes[t] = struct{}{}
-	p.debug(fmt.Sprintf("registered injection type %s", t))
 	return nil
 }
 
