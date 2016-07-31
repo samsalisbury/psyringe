@@ -67,33 +67,34 @@ type Psyringe struct {
 }
 
 var (
-	terror = reflect.TypeOf((*error)(nil)).Elem()
+	terror    = reflect.TypeOf((*error)(nil)).Elem()
+	noopDebug = func(...interface{}) {}
 )
 
 // New creates a new Psyringe, and adds the provided constructors and values to
-// it. It returns an error if Add returns an error. See Add for more details.
-func New(constructorsAndValues ...interface{}) (*Psyringe, error) {
-	p := &Psyringe{
-		values:         map[reflect.Type]reflect.Value{},
-		ctors:          map[reflect.Type]*ctor{},
-		injectionTypes: map[reflect.Type]struct{}{},
-		debug:          noopDebug,
-	}
-	return p, p.Add(constructorsAndValues...)
-}
-
-// MustNew wraps New, and panics if New returns an error.
-func MustNew(constructorsAndValues ...interface{}) *Psyringe {
-	p, err := New(constructorsAndValues...)
+// it. New will panic if any two arguments have the same injection type. Ssee
+// package level documentation for definition of "injection type".
+func New(constructorsAndValues ...interface{}) *Psyringe {
+	p, err := NewErr(constructorsAndValues...)
 	if err != nil {
 		panic(err)
 	}
 	return p
 }
 
-func noopDebug(...interface{}) {}
+// NewErr is similar to New, but returns an error instead of panicking. This is
+// useful if you are dynamically generating the arguments.
+func NewErr(constructorsAndValues ...interface{}) (*Psyringe, error) {
+	p := &Psyringe{
+		values:         map[reflect.Type]reflect.Value{},
+		ctors:          map[reflect.Type]*ctor{},
+		injectionTypes: map[reflect.Type]struct{}{},
+		debug:          noopDebug,
+	}
+	return p, p.AddErr(constructorsAndValues...)
+}
 
-// Add adds constructors and values to the Psyringe. It returns an error if any
+// Add adds constructors and values to the Psyringe. It panics if any
 // pair of constructors and values have the same injection type. See package
 // documentation for definition of "injection type".
 //
@@ -101,7 +102,15 @@ func noopDebug(...interface{}) {}
 // or not. For each constructor, it then generates a generic function in terms
 // of reflect.Values ready to be used by a call to Inject. As such, Add is a
 // relatively expensive call. See Clone for how to avoid calling Add too often.
-func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
+func (s *Psyringe) Add(constructorsAndValues ...interface{}) {
+	if err := s.AddErr(constructorsAndValues...); err != nil {
+		panic(err)
+	}
+}
+
+// AddErr is similar to Add, but returns an error instead of panicking. This is
+// useful if you are dynamically generating the arguments.
+func (s *Psyringe) AddErr(constructorsAndValues ...interface{}) error {
 	for i, thing := range constructorsAndValues {
 		if thing == nil {
 			return fmt.Errorf("cannot add nil (argument %d)", i)
@@ -111,13 +120,6 @@ func (s *Psyringe) Add(constructorsAndValues ...interface{}) error {
 		}
 	}
 	return nil
-}
-
-// MustAdd wraps Add and panics if Add returns an error.
-func (s *Psyringe) MustAdd(constructorsAndValues ...interface{}) {
-	if err := s.Add(constructorsAndValues...); err != nil {
-		panic(err)
-	}
 }
 
 // Clone returns a clone of this Psyringe.
@@ -143,8 +145,8 @@ func (s *Psyringe) Clone() *Psyringe {
 // level logs. The debug function has the same signature as log.Println from the
 // standard library.
 //
-// If you do not call SetDebugFunc, or if
-// you pass it nil, debug messages will be ignored.
+// If you do not call SetDebugFunc, or if you pass it nil, debug messages will be
+// ignored.
 func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 	if f != nil {
 		s.debug = f
@@ -153,14 +155,14 @@ func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 	}
 }
 
-// Inject takes a list of targets, which must be pointers to struct types. It
+// Inject takes a list of targets, which must be pointers to structs. It
 // tries to inject a value for each field in each target, if a value is known
 // for that field's type. All targets, and all fields in each target, are
 // resolved concurrently where the graph allows. In the instance that the
 // Psyringe knows no injection type for a given field's type, that field is
 // passed over, leaving it with whatever value it already had.
 //
-// See package documentation for details on how the Psyringe injects values.
+// See package documentation for details on how a Psyringe injects values.
 func (s *Psyringe) Inject(targets ...interface{}) error {
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))

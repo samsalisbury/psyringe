@@ -12,7 +12,7 @@ func TestPsyringe_Test_fails(t *testing.T) {
 	newStructPtr := func(s string, b float64, i int) *struct{} { return nil }
 	aBuffer := &bytes.Buffer{}
 
-	s, err := New(newString, newInt, newStructPtr, aBuffer)
+	s, err := NewErr(newString, newInt, newStructPtr, aBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,13 +31,13 @@ func TestPsyringe_Test_fails(t *testing.T) {
 }
 
 func TestPsyringe_Test_succeeds(t *testing.T) {
-	if err := MustNew().Test(); err != nil {
+	if err := New().Test(); err != nil {
 		t.Fatalf("unexpected error %q", err)
 	}
 	newInt := func(b *bytes.Buffer) int { return b.Len() }
 	newString := func(int) string { return "" }
 	aBuffer := &bytes.Buffer{}
-	if err := MustNew(aBuffer, newInt, newString).Test(); err != nil {
+	if err := New(aBuffer, newInt, newString).Test(); err != nil {
 		t.Fatalf("unexpected error %q", err)
 	}
 }

@@ -6,21 +6,23 @@ import (
 	"github.com/samsalisbury/psyringe"
 )
 
-type SomeStruct struct {
+type Speaker struct {
 	Message    string
 	MessageLen int
 }
 
+// Contrived example showing how to create a Psyringe with interdependent
+// constructors and then inject their values into a struct that depends on them.
 func Example() {
-	p := psyringe.MustNew(
-		func() string { return "Hi!" },
-		func(s string) int { return len(s) },
+	p := psyringe.New(
+		func() string { return "Hi!" },       // string constructor
+		func(s string) int { return len(s) }, // int constructor (needs string)
 	)
-	v := SomeStruct{}
+	v := Speaker{}
 	if err := p.Inject(&v); err != nil {
-		panic(err)
+		panic(err) // a little drastic I'm sure
 	}
-	fmt.Printf("SomeStruct says %q in %d characters.", v.Message, v.MessageLen)
+	fmt.Printf("Speaker says %q in %d characters.", v.Message, v.MessageLen)
 	// output:
-	// SomeStruct says "Hi!" in 3 characters.
+	// Speaker says "Hi!" in 3 characters.
 }

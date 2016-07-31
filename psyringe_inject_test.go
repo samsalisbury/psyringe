@@ -14,7 +14,7 @@ type dependent struct {
 }
 
 func TestPsyringe_Inject_objects(t *testing.T) {
-	s, err := New(1, "hello", bytes.NewBuffer([]byte("world")))
+	s, err := NewErr(1, "hello", bytes.NewBuffer([]byte("world")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestPsyringe_Inject_constructors(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
 	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
 
-	s, err := New(newInt, newString, newBuffer)
+	s, err := NewErr(newInt, newString, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,7 +68,7 @@ func TestPsyringe_Inject_mixed(t *testing.T) {
 		return bytes.NewBuffer([]byte(fmt.Sprintf("%s %s %d", s, "world", i)))
 	}
 
-	s, err := New(newBuffer, 100, newString)
+	s, err := NewErr(newBuffer, 100, newString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ var uninjectables = map[string]interface{}{
 
 func TestPsyringe_Inject_uninjectable(t *testing.T) {
 	for expected, uninjectable := range uninjectables {
-		err := MustNew().Inject(uninjectable)
+		err := New().Inject(uninjectable)
 		if err == nil {
 			t.Errorf("got nil; want error %q", expected)
 		}
@@ -114,7 +114,7 @@ func TestPsyringe_Inject_customErrors(t *testing.T) {
 		return "", fmt.Errorf("an error")
 	}
 
-	s, err := New(newString)
+	s, err := NewErr(newString)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestPsyringe_Inject_dependencyTree(t *testing.T) {
 		return originalBufferRef
 	}
 
-	s, err := New(newDependent, newString, newInt, newBuffer)
+	s, err := NewErr(newDependent, newString, newInt, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -257,7 +257,7 @@ func TestPsyringe_Inject_dependencyTreeErrors(t *testing.T) {
 		return bytes.NewBuffer([]byte("yes"))
 	}
 
-	s, err := New(newDependent, newString, newInt, newBuffer)
+	s, err := NewErr(newDependent, newString, newInt, newBuffer)
 	if err != nil {
 		t.Fatal(err)
 	}

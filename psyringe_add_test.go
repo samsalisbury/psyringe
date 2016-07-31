@@ -11,7 +11,7 @@ import (
 type named string
 
 func TestPsyringe_Add_success(t *testing.T) {
-	_, err := New(
+	_, err := NewErr(
 
 		// objects
 		//
@@ -37,7 +37,7 @@ func TestPsyringe_Add_success(t *testing.T) {
 
 func TestPsyringe_Add_alreadyRegisteredError(t *testing.T) {
 	e := func(a, b interface{}, expectedInjectionType string) {
-		_, err := New(a, b)
+		_, err := NewErr(a, b)
 		what := fmt.Sprintf("New(%T, %T)", a, b)
 		if err == nil {
 			t.Errorf("nil error for %s", what)
@@ -110,7 +110,7 @@ func TestPsyringe_Add_alreadyRegisteredError(t *testing.T) {
 
 func TestPsyringe_Add_nil(t *testing.T) {
 	expected := "cannot add nil (argument 3)"
-	err := MustNew().Add(1, "", struct{}{}, nil, func(int) interface{} { return nil })
+	err := New().AddErr(1, "", struct{}{}, nil, func(int) interface{} { return nil })
 	if err == nil {
 		t.Fatalf("got nil; want error %q", expected)
 	}

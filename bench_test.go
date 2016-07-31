@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-type benchStruct struct {
+type BenchStruct struct {
 	String    string
 	Int       int
 	Float     float64
@@ -44,39 +44,37 @@ var bestCaseConstructors = []interface{}{
 	func() (io.Reader, error) { return &bytes.Buffer{}, nil },
 }
 
+// Some package-level variables to make sure compiler doesn't optimise away
+// calls to New, Clone or Inject.
+// See http://dave.cheney.net/2013/06/30/how-to-write-benchmarks-in-go
+var (
+	P *Psyringe
+	S BenchStruct
+)
+
 func BenchmarkNew_WorstCase(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := New(worstCaseConstructors...)
-		if err != nil {
-			b.Fatal(err)
-		}
+		P = New(worstCaseConstructors...)
 	}
 }
+
 func BenchmarkNew_BestCase(b *testing.B) {
 	for i := 0; i < b.N; i++ {
-		_, err := New(bestCaseConstructors...)
-		if err != nil {
-			b.Fatal(err)
-		}
+		P = New(bestCaseConstructors...)
 	}
 }
 
 func BenchmarkClone_WorstCase(b *testing.B) {
-	p, err := New(worstCaseConstructors...)
-	if err != nil {
-		b.Fatal(err)
-	}
+	P = New(worstCaseConstructors...)
 	for i := 0; i < b.N; i++ {
-		p.Clone()
+		P = P.Clone()
 	}
 }
+
 func BenchmarkClone_BestCase(b *testing.B) {
-	p, err := New(bestCaseConstructors...)
-	if err != nil {
-		b.Fatal(err)
-	}
+	P = New(bestCaseConstructors...)
 	for i := 0; i < b.N; i++ {
-		p.Clone()
+		P = P.Clone()
 	}
 }
 
@@ -84,20 +82,18 @@ func BenchmarkClone_BestCase(b *testing.B) {
 // injection before the loop starts to initialise all values. This probably
 // isn't a very likely scenario in real life.
 func BenchmarkMustInject_WorstCase(b *testing.B) {
-	p := MustNew(worstCaseConstructors...)
-	s := benchStruct{}
-	p.MustInject(&s)
+	P = New(worstCaseConstructors...)
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p.MustInject(&s)
+		P.MustInject(&S)
 	}
 }
 
 func BenchmarkMustInject_BestCase(b *testing.B) {
-	p := MustNew(bestCaseConstructors...)
-	s := benchStruct{}
-	p.MustInject(&s)
+	P = New(bestCaseConstructors...)
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p.MustInject(&s)
+		P.MustInject(&S)
 	}
 }
 
@@ -105,18 +101,18 @@ func BenchmarkMustInject_BestCase(b *testing.B) {
 // psyringe and injecting with it. This benchmark exists primarily to compare
 // New with Clone.
 func BenchmarkNewMustInject_WorstCase(b *testing.B) {
-	s := benchStruct{}
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p := MustNew(worstCaseConstructors...)
-		p.MustInject(&s)
+		P = New(worstCaseConstructors...)
+		P.Inject(&S)
 	}
 }
 
 func BenchmarkNewMustInject_BestCase(b *testing.B) {
-	s := benchStruct{}
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p := MustNew(bestCaseConstructors...)
-		p.MustInject(&s)
+		P = New(bestCaseConstructors...)
+		P.MustInject(&S)
 	}
 }
 
@@ -124,17 +120,17 @@ func BenchmarkNewMustInject_BestCase(b *testing.B) {
 // an existing one and injecting with it. This is a likely scenario in a web
 // server, for example, where certain resources must be created on each request.
 func BenchmarkCloneMustInject_WorstCase(b *testing.B) {
-	p := MustNew(worstCaseConstructors...)
-	s := benchStruct{}
+	P = New(worstCaseConstructors...)
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p.Clone().MustInject(&s)
+		P.Clone().MustInject(&S)
 	}
 }
 
 func BenchmarkCloneMustInject_BestCase(b *testing.B) {
-	p := MustNew(bestCaseConstructors...)
-	s := benchStruct{}
+	P = New(bestCaseConstructors...)
+	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
-		p.Clone().MustInject(&s)
+		P.Clone().MustInject(&S)
 	}
 }

@@ -27,7 +27,7 @@ func (c Command) Print() {
 }
 
 func ExampleSyringe_simple() {
-	s, err := psyringe.New(NewUsername, NewHostname, NewLoadAverage)
+	s, err := psyringe.NewErr(NewUsername, NewHostname, NewLoadAverage)
 	if err != nil {
 		log.Fatal(err)
 	}

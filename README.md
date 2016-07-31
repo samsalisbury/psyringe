@@ -3,23 +3,27 @@
 Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
 ```go
-type SomeStruct struct {
+//file: example_test.go
+
+type Speaker struct {
 	Message    string
 	MessageLen int
 }
 
+// Contrived example showing how to create a Psyringe with interdependent
+// constructors and then inject their values into a struct that depends on them.
 func Example() {
-	p := psyringe.MustNew(
-		func() string { return "Hi!" },
-		func(s string) int { return len(s) },
+	p := psyringe.New(
+		func() string { return "Hi!" },       // string constructor
+		func(s string) int { return len(s) }, // int constructor (needs string)
 	)
-	v := SomeStruct{}
+	v := Speaker{}
 	if err := p.Inject(&v); err != nil {
-		panic(err)
+		panic(err) // a little drastic I'm sure
 	}
-	fmt.Printf("SomeStruct says %q in %d characters.", v.Message, v.MessageLen)
+	fmt.Printf("Speaker says %q in %d characters.", v.Message, v.MessageLen)
 	// output:
-	// SomeStruct says "Hi!" in 3 characters.
+	// Speaker says "Hi!" in 3 characters.
 }
 ```
 
@@ -35,7 +39,7 @@ Fully [documented at GoDoc.org].
 
 - **Concurrent, lazy initialisation:** with no extra work on your part.
 - **[No tags]:** keep your code clean and readable.
-- **[Simple API]:** usually only needs two calls: `p := psyringe.MustNew()` and `p.Inject()`
+- **[Simple API]:** usually only needs two calls: `p := psyringe.New()` and `p.Inject()`
 - **[Supports advanced use cases]:** e.g. [scopes], [named instances], debugging
 
 [No tags]: #no-tags
@@ -69,7 +73,7 @@ psyringe is a _parallel syringe_ which automatically injects multiple values sim
 
 ## Usage
 
-Create a new psyringe with `p := psyringe.MustNew` passing in constructors and other values.
+Create a new psyringe with `p := psyringe.New` passing in constructors and other values.
 Then, call `p.Inject(...)` to inject those values into structs with correspondingly typed fields.
 
 Please see [the documentation] for more usage examples.
@@ -116,8 +120,8 @@ If you need values with different scopes, then you can use multiple Psyringes, o
 var appScopedPsyringe, requestScopedPsyringe psyringe.Psyringe
 
 func main() {
-	appScopedPsyringe = psyringe.MustNew(ApplicationScopedThings...)
-	requestPsyringe = psyringe.MustNew(RequestScopedThings...)
+	appScopedPsyringe = psyringe.New(ApplicationScopedThings...)
+	requestPsyringe = psyringe.New(RequestScopedThings...)
 	http.HandleFunc("/", HandleHTTPRequest)
 	http.ListenAndServe(":8080")
 }
