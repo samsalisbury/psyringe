@@ -8,23 +8,20 @@ value construction, automatically being as concurrent as your dependency graph
 allows.
 
 Psyringe does not rely on messy struct field tags nor verbose graph construction
-syntax, and it keeps "magic" to an absolute minimum. It is very flexible
-and has a small interface, allowing you to tailor things like scopes and object
-lifetimes very easily using standard Go code.
+syntax. It is very flexible and has a small interface, allowing you to tailor
+things like scopes and object lifetimes very easily using standard Go code.
 
-The examples (below) should speak for themselves, but if you want a deeper
+The example tests should speak for themselves, but if you want a deeper
 explanation of how Psyringe works, read on.
 
 Injection Type
 
-Values and constructors added to psyringe have an implicit "injection type".
+Constructors and values added to psyringe have an implicit "injection type".
 This is the type of value that constructor or value represents in the graph. For
 non-constructor values, the injection type is the type of the value itself,
 determined by reflect.GetType(). For constructors, it is the type of the first
 output (return) value. It is important to understand this concept, since a
 single psyringe can have only one value or constructor per injection type.
-`Add` will return an error if you try to register multiple values and/or
-constructors that have the same injection type.
 
 Constructors
 
@@ -69,12 +66,11 @@ type Psyringe struct {
 }
 
 var (
-	terror    = reflect.TypeOf((*error)(nil)).Elem()
 	noopDebug = func(...interface{}) {}
 )
 
 // New creates a new Psyringe, and adds the provided constructors and values to
-// it. New will panic if any two arguments have the same injection type. Ssee
+// it. New will panic if any two arguments have the same injection type. See
 // package level documentation for definition of "injection type".
 func New(constructorsAndValues ...interface{}) *Psyringe {
 	p, err := NewErr(constructorsAndValues...)
@@ -156,14 +152,13 @@ func (p *Psyringe) Clone() *Psyringe {
 // level logs. The debug function has the same signature as log.Println from the
 // standard library.
 //
-// If you do not call SetDebugFunc, or if you pass it nil, debug messages will be
-// ignored.
+// If you do not call SetDebugFunc, or if you pass it nil, debug messages will
+// be ignored.
 func (p *Psyringe) SetDebugFunc(f func(...interface{})) {
-	if f != nil {
-		p.debug = f
-	} else {
-		p.debug = noopDebug
+	if f == nil {
+		f = noopDebug
 	}
+	p.debug = f
 }
 
 // Inject takes a list of targets, which must be pointers to structs. It

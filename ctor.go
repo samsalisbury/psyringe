@@ -19,6 +19,9 @@ type ctor struct {
 	value     *reflect.Value
 }
 
+// terror is the type "error"
+var terror = reflect.TypeOf((*error)(nil)).Elem()
+
 func newCtor(t reflect.Type, v reflect.Value) *ctor {
 	if t.Kind() != reflect.Func || t.IsVariadic() {
 		return nil
