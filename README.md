@@ -1,4 +1,10 @@
-# psyringe [![CircleCI](https://circleci.com/gh/samsalisbury/psyringe.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe) [![GoDoc](https://godoc.org/github.com/samsalisbury/psyringe?status.svg)](https://godoc.org/github.com/samsalisbury/psyringe) [![codecov](https://codecov.io/gh/samsalisbury/psyringe/branch/master/graph/badge.svg)](https://codecov.io/gh/samsalisbury/psyringe) [![Go Report Card](https://goreportcard.com/badge/github.com/samsalisbury/psyringe)](https://goreportcard.com/report/github.com/samsalisbury/psyringe)
+# psyringe
+
+[![CircleCI](https://circleci.com/gh/samsalisbury/psyringe.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe)
+[![codecov](https://codecov.io/gh/samsalisbury/psyringe/branch/master/graph/badge.svg)](https://codecov.io/gh/samsalisbury/psyringe)
+[![Go Report Card](https://goreportcard.com/badge/github.com/samsalisbury/psyringe)](https://goreportcard.com/report/github.com/samsalisbury/psyringe)
+[![GoDoc](https://godoc.org/github.com/samsalisbury/psyringe?status.svg)](https://godoc.org/github.com/samsalisbury/psyringe)
+[![License MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 Psyringe is a [fast], **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
