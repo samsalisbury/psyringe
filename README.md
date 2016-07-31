@@ -59,7 +59,7 @@ func Example() {
 
 ### Concurrent Initialisation
 
-A dependency graph already contains enough information to know which parts can be run concurrently: Any two dependencies in the graph that do not have a line between them can be generated at the same time. Psyringe uses this fact to ask every constructor in the graph to execute at the same time, using channels internally to pipe the results of each successful constructor to all the other constructors that need its generated value. The beauty of Go's channel primitives mean this graph is determined implicitly without any heavy analysis.
+A dependency graph already contains enough information to know which parts can be run concurrently: Any two dependencies in the graph that do not have an edge between them can be generated at the same time. Psyringe uses channels internally to represent the edges in the graph, piping the results of each successful constructor to all the other constructors that need its generated value. The beauty of Go's channel primitives mean this graph is determined implicitly without heavy up-front analysis.
 
 ### No Tags
 
