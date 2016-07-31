@@ -56,6 +56,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 // Psyringe is a dependency injection container.
@@ -91,7 +93,7 @@ func NewErr(constructorsAndValues ...interface{}) (*Psyringe, error) {
 		injectionTypes: map[reflect.Type]struct{}{},
 		debug:          noopDebug,
 	}
-	return p, p.AddErr(constructorsAndValues...)
+	return p, errors.Wrap(p.AddErr(constructorsAndValues...), "Add failed")
 }
 
 // Add adds constructors and values to the Psyringe. It panics if any
@@ -120,6 +122,15 @@ func (p *Psyringe) AddErr(constructorsAndValues ...interface{}) error {
 		}
 	}
 	return nil
+}
+
+func (p *Psyringe) add(thing interface{}) error {
+	v := reflect.ValueOf(thing)
+	t := v.Type()
+	if c := newCtor(t, v); c != nil {
+		return errors.Wrapf(p.addCtor(c), "adding constructor %s failed", c.funcType)
+	}
+	return errors.Wrapf(p.addValue(t, v), "adding %s value failed", t)
 }
 
 // Clone returns a clone of this Psyringe.
@@ -175,8 +186,7 @@ func (p *Psyringe) Inject(targets ...interface{}) error {
 		go func(target interface{}) {
 			defer wg.Done()
 			if err := p.inject(target); err != nil {
-				p.debug("error injecting into %T: %s", target, err)
-				errs <- err
+				errs <- errors.Wrapf(err, "inject into %T target failed", target)
 			}
 			p.debug("finished injecting into %T", target)
 		}(t)
@@ -197,7 +207,7 @@ func (p *Psyringe) MustInject(targets ...interface{}) {
 func (p *Psyringe) Test() error {
 	for _, c := range p.ctors {
 		if err := c.testParametersAreRegisteredIn(p); err != nil {
-			return err
+			return errors.Wrapf(err, "unable to satisfy constructor %s", c.funcType)
 		}
 	}
 	return nil
@@ -210,14 +220,14 @@ func (p *Psyringe) inject(target interface{}) error {
 	v := reflect.ValueOf(target)
 	ptr := v.Type()
 	if ptr.Kind() != reflect.Ptr {
-		return fmt.Errorf("got a %s; want a pointer", ptr)
+		return fmt.Errorf("target must be a pointer")
 	}
 	t := ptr.Elem()
 	if t.Kind() != reflect.Struct {
-		return fmt.Errorf("got a %s, but %s is not a struct", ptr, t)
+		return fmt.Errorf("target must be a pointer to struct")
 	}
 	if v.IsNil() {
-		return fmt.Errorf("got a %s, but it was nil", ptr)
+		return fmt.Errorf("target is nil")
 	}
 	nfs := t.NumField()
 	wg := sync.WaitGroup{}
@@ -230,9 +240,9 @@ func (p *Psyringe) inject(target interface{}) error {
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, fieldName string) {
 			defer wg.Done()
-			if fv, ok, err := p.getValueForStructField(f.Type()); ok && err == nil {
+			if fv, ok, err := p.getValueForStructField(f.Type(), fieldName); ok && err == nil {
 				f.Set(fv)
-				p.debug("populated %s.%s with %v", t, fieldName, fv)
+				p.debug(fmt.Sprintf("populated %s.%s with %v", t, fieldName, fv))
 			} else if err != nil {
 				errs <- err
 			}
@@ -241,27 +251,7 @@ func (p *Psyringe) inject(target interface{}) error {
 	return <-errs
 }
 
-func (p *Psyringe) add(thing interface{}) error {
-	v := reflect.ValueOf(thing)
-	t := v.Type()
-	var err error
-	var what string
-	if c := newCtor(t, v); c != nil {
-		what = "constructor for " + c.outType.Name()
-		err = p.addCtor(c)
-	} else {
-		what = "fully realised value " + fmt.Sprint(thing)
-		err = p.addValue(t, v)
-	}
-	if err != nil {
-		p.debug("error adding %s (%T): %s", what, thing, err)
-	} else {
-		p.debug("added %s (%T)", what, thing)
-	}
-	return err
-}
-
-func (p *Psyringe) getValueForStructField(t reflect.Type) (reflect.Value, bool, error) {
+func (p *Psyringe) getValueForStructField(t reflect.Type, name string) (reflect.Value, bool, error) {
 	if v, ok := p.values[t]; ok {
 		return v, true, nil
 	}
@@ -270,7 +260,7 @@ func (p *Psyringe) getValueForStructField(t reflect.Type) (reflect.Value, bool, 
 		return reflect.Value{}, false, nil
 	}
 	v, err := c.getValue(p)
-	return v, true, err
+	return v, true, errors.Wrapf(err, "getting field %s (%s) failed", name, t)
 }
 
 func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
@@ -279,13 +269,10 @@ func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t refle
 	}
 	c, ok := p.ctors[t]
 	if !ok {
-		return reflect.Value{}, NoConstructorOrValue{
-			ConstructorType:       forCtor.funcType,
-			ConstructorParamIndex: paramIndex,
-			ForType:               t,
-		}
+		return reflect.Value{}, errors.Errorf("no constructor or value for %s", t)
 	}
-	return c.getValue(p)
+	v, err := c.getValue(p)
+	return v, errors.Wrapf(err, "getting argument %d failed", paramIndex)
 }
 
 func (p *Psyringe) addCtor(c *ctor) error {
@@ -303,5 +290,16 @@ func (p *Psyringe) registerInjectionType(t reflect.Type) error {
 		return fmt.Errorf("injection type %s already registered", t)
 	}
 	p.injectionTypes[t] = struct{}{}
+	p.debug(fmt.Sprintf("registered injection type %s", t))
 	return nil
+}
+
+func (p *Psyringe) testValueOrConstructorIsRegistered(paramType reflect.Type) error {
+	if _, constructorExists := p.ctors[paramType]; constructorExists {
+		return nil
+	}
+	if _, valueExists := p.values[paramType]; valueExists {
+		return nil
+	}
+	return errors.Errorf("no constructor or value for %s", paramType)
 }

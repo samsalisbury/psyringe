@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+
+	"github.com/pkg/errors"
 )
 
 // ctor is a constructor for a single value.
@@ -64,25 +66,19 @@ func (c ctor) clone() *ctor {
 
 func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 	for paramIndex, paramType := range c.inTypes {
-		if _, constructorExists := s.ctors[paramType]; constructorExists {
-			continue
-		}
-		if _, valueExists := s.values[paramType]; valueExists {
-			continue
-		}
-		return NoConstructorOrValue{
-			ForType:               paramType,
-			ConstructorParamIndex: paramIndex,
-			ConstructorType:       c.funcType,
+		if err := s.testValueOrConstructorIsRegistered(paramType); err != nil {
+			return errors.Wrapf(err, "unable to satisfy param %d", paramIndex)
 		}
 	}
 	return nil
 }
 
-func (c *ctor) getValue(s *Psyringe) (reflect.Value, error) {
-	go c.once.Do(func() { c.manifest(s) })
+func (c *ctor) getValue(p *Psyringe) (reflect.Value, error) {
+	go c.once.Do(func() { c.manifest(p) })
 	if err := <-c.errChan; err != nil {
-		return reflect.Value{}, err
+		return reflect.Value{},
+			errors.Wrapf(err, "invoking %s constructor (%s) failed",
+				c.outType, c.funcType)
 	}
 	return *c.value, nil
 }

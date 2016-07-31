@@ -91,9 +91,9 @@ func TestPsyringe_Inject_mixed(t *testing.T) {
 }
 
 var uninjectables = map[string]interface{}{
-	"got a int; want a pointer":           1,
-	"got a *int, but int is not a struct": new(int),
-	"got a *struct {}, but it was nil":    ((*struct{})(nil)),
+	"inject into int target failed: target must be a pointer":            1,
+	`inject into *int target failed: target must be a pointer to struct`: new(int),
+	"inject into *struct {} target failed: target is nil":                ((*struct{})(nil)),
 }
 
 func TestPsyringe_Inject_uninjectable(t *testing.T) {
@@ -127,7 +127,7 @@ func TestPsyringe_Inject_customErrors(t *testing.T) {
 	}
 
 	actual := err.Error()
-	expected := "an error"
+	expected := `inject into *psyringe.dependent target failed: getting field String (string) failed: invoking string constructor (func() (string, error)) failed: an error`
 
 	if actual != expected {
 		t.Errorf("got error %q; want %q", actual, expected)
@@ -270,7 +270,7 @@ func TestPsyringe_Inject_dependencyTreeErrors(t *testing.T) {
 	}
 
 	actual := err.Error()
-	expected := "error from newString"
+	expected := "inject into *psyringe.dependsOnDependent target failed: getting field Dependency (psyringe.dependent) failed: invoking psyringe.dependent constructor (func(int, string, *bytes.Buffer) psyringe.dependent) failed: getting argument 1 failed: invoking string constructor (func(int, *bytes.Buffer) (string, error)) failed: error from newString"
 
 	if actual != expected {
 		t.Fatalf("got %q; want %q", actual, expected)

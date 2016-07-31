@@ -11,11 +11,11 @@ type HasIntField struct {
 
 var panickers = map[string]func(){
 	// MustNew
-	"injection type int already registered": func() {
+	"Add failed: adding constructor func() int failed: injection type int already registered": func() {
 		New(func() int { return 0 }, func() int { return 1 }) // panics
 	},
 	// MustAdd
-	"injection type struct {} already registered": func() {
+	"adding constructor func() struct {} failed: injection type struct {} already registered": func() {
 		p, err := NewErr(func() (struct{}, error) { return struct{}{}, nil })
 		if err != nil {
 			panic("inconclusive; New failed: " + err.Error())
@@ -23,7 +23,7 @@ var panickers = map[string]func(){
 		p.Add(func() (s struct{}) { return }) // panics
 	},
 	// MustInject
-	"injection type string not known (calling constructor func(string) int)": func() {
+	"inject into *psyringe.HasIntField target failed: getting field Int (int) failed: invoking int constructor (func(string) int) failed: no constructor or value for string": func() {
 		p, err := NewErr(func(s string) int { return len(s) })
 		if err != nil {
 			panic("inconclusive; New failed: " + err.Error())
