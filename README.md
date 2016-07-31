@@ -200,5 +200,17 @@ func newFunc() func(int) (int, error) {
 }
 ```
 
+# TODO
+
+- Add examples for: New, Add, Clone, Inject
+- Add HTTP server example
+- Make injection more efficient.
+  (The benchmarks imply this is relatively expensive still, may be
+  worth caching injection plan per target type, for use in cloned
+  Psyringes.)
+- Find other benchmarks to compare with.
+- Add Even Lazier TM injection using struct func fields.
+- Never add tags! Never!
+
 ===
 Copyright (c) 2016 Sam Salisbury; [License MIT](./LICENSE)
