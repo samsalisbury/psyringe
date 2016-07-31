@@ -64,7 +64,9 @@ func TestPsyringe_Inject_constructors(t *testing.T) {
 
 func TestPsyringe_Inject_mixed(t *testing.T) {
 	newString := func() (string, error) { return "hello", nil }
-	newBuffer := func() *bytes.Buffer { return bytes.NewBuffer([]byte("world")) }
+	newBuffer := func(s string, i int) *bytes.Buffer {
+		return bytes.NewBuffer([]byte(fmt.Sprintf("%s %s %d", s, "world", i)))
+	}
 
 	s, err := New(newBuffer, 100, newString)
 	if err != nil {
@@ -83,7 +85,7 @@ func TestPsyringe_Inject_mixed(t *testing.T) {
 	if d.String != "hello" {
 		t.Errorf("string constructor not injected")
 	}
-	if d.Buffer.String() != "world" {
+	if d.Buffer.String() != "hello world 100" {
 		t.Errorf("*bytes.Buffer constructor not injected")
 	}
 }

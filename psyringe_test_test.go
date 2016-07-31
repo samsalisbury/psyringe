@@ -7,7 +7,7 @@ import (
 
 func TestPsyringe_Test_fails(t *testing.T) {
 
-	newString := func() string { return "" }
+	newString := func(*bytes.Buffer) string { return "" }
 	newInt := func() (int, error) { return 1, nil }
 	newStructPtr := func(s string, b float64, i int) *struct{} { return nil }
 	aBuffer := &bytes.Buffer{}

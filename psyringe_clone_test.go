@@ -16,6 +16,7 @@ func TestPsyringe_Clone(t *testing.T) {
 	var stringCounter, intCounter Counter
 
 	original := MustNew(
+		1,
 		func() string {
 			stringCounter.Increment()
 			return "#" + stringCounter.String()

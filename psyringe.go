@@ -91,8 +91,7 @@ func MustNew(constructorsAndValues ...interface{}) *Psyringe {
 	return p
 }
 
-func noopDebug(...interface{})          {}
-func noopDebugf(string, ...interface{}) {}
+func noopDebug(...interface{}) {}
 
 // Add adds constructors and values to the Psyringe. It returns an error if any
 // pair of constructors and values have the same injection type. See package
@@ -163,9 +162,6 @@ func (s *Psyringe) SetDebugFunc(f func(...interface{})) {
 //
 // See package documentation for details on how the Psyringe injects values.
 func (s *Psyringe) Inject(targets ...interface{}) error {
-	if s.values == nil {
-		return fmt.Errorf("not initialised; call Add before Inject")
-	}
 	wg := sync.WaitGroup{}
 	wg.Add(len(targets))
 	errs := make(chan error)
