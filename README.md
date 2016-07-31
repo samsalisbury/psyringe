@@ -210,6 +210,7 @@ func newFunc() func(int) (int, error) {
   Psyringes.)
 - Find other benchmarks to compare with.
 - Add Even Lazier TM injection using struct func fields.
+- Add Windows build with AppVeyor 
 - Never add tags! Never!
 
 ===
