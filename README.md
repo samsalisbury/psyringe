@@ -47,7 +47,7 @@ func Example() {
 - **[Concurrent initialisation]:** with no extra work on your part.
 - **[No tags]:** keep your code clean and readable.
 - **[Simple API]:** usually only needs two calls: `p := psyringe.New()` and `p.Inject()`
-- **[Supports advanced use cases]:** e.g. [scopes], [named instances], debugging
+- **[Supports advanced use cases]:** e.g. [scopes] and [named instances].
 
 [Concurrent initialisation]: #concurrent-initialisation
 [No tags]: #no-tags
