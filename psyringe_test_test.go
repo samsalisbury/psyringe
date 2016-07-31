@@ -34,7 +34,10 @@ func TestPsyringe_Test_succeeds(t *testing.T) {
 	if err := MustNew().Test(); err != nil {
 		t.Fatalf("unexpected error %q", err)
 	}
-	if err := MustNew(func() int { return 1 }, func(int) string { return "" }).Test(); err != nil {
+	newInt := func(b *bytes.Buffer) int { return b.Len() }
+	newString := func(int) string { return "" }
+	aBuffer := &bytes.Buffer{}
+	if err := MustNew(aBuffer, newInt, newString).Test(); err != nil {
 		t.Fatalf("unexpected error %q", err)
 	}
 }
