@@ -3,15 +3,27 @@
 Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
 ```go
-p, err := psyringe.New(ValuesAndConstructors...)
-if err != nil {
-	panic(err)
+type SomeStruct struct {
+	Message    string
+	MessageLen int
 }
-target := SomeThing{}
-p.Inject(&target)
+
+func Example() {
+	p := psyringe.MustNew(
+		func() string { return "Hi!" },
+		func(s string) int { return len(s) },
+	)
+	v := SomeStruct{}
+	if err := p.Inject(&v); err != nil {
+		panic(err)
+	}
+	fmt.Printf("SomeStruct says %q in %d characters.", v.Message, v.MessageLen)
+	// output:
+	// SomeStruct says "Hi!" in 3 characters.
+}
 ```
 
-See a [simple usage example], below. Fully [documented at GoDoc.org].
+Fully [documented at GoDoc.org].
 
 [lazy]: https://en.wikipedia.org/wiki/Lazy_initialization
 [dependency injector]: https://en.wikipedia.org/wiki/Dependency_injection
@@ -21,42 +33,21 @@ See a [simple usage example], below. Fully [documented at GoDoc.org].
 
 ## Features
 
-- **[Concurrent, lazy initialisation]:** with no extra work on your part.
+- **Concurrent, lazy initialisation:** with no extra work on your part.
 - **[No tags]:** keep your code clean and readable.
 - **[Simple API]:** usually only needs two calls: `p := psyringe.MustNew()` and `p.Inject()`
-- **[Supports advanced use cases]:** e.g. [scopes], [named instances], [debugging]
+- **[Supports advanced use cases]:** e.g. [scopes], [named instances], debugging
 
-[Concurrent, lazy initialisation]: #concurrent-and-lazy
 [No tags]: #no-tags
 [Simple API]: #simple-api
 [Supports advanced use cases]: #advanced-uses
 
 [scopes]: #scopes
 [named instances]: #named-instances
-[debugging]: #debugging
 
-### Concurrent and lazy
+### Example code.
 
-Value graphs are populated recursively, and concurrently where the structure allows. For example, in the following code, both `NewLaser` and `NewCog` will be run simultaneously when running `psyringe.Inject` since neither depends on the other. However `NewBanana` will not be run, since `FlyingSaucer` does not have any transitive dependency on it.
-
-```go
-func NewLaser() Laser                 { return Laser{} }
-func NewCog() Cog                     { return Cog{} }
-func NewBanana() Banana               { panic("this won't be called") }
-func NewCannon(x Laser, y Cog) Widget { return Cannon{x, y} }
-
-type (
-    Cannon struct {
-	    BeamGenerator Laser
-	    Rotator       Cog
-    }
-    FlyingSaucer struct { MainGun Cannon }
-)
-
-p := psyringe.MustNew(NewCannon, NewLaser, NewCog, NewBanana)
-ufo := FlyingSaucer{}
-p.Inject(&ufo)
-```
+Value graphs are populated recursively, and concurrently where the structure allows.
 
 ### No Tags
 
@@ -81,7 +72,7 @@ psyringe is a _parallel syringe_ which automatically injects multiple values sim
 Create a new psyringe with `p := psyringe.MustNew` passing in constructors and other values.
 Then, call `p.Inject(...)` to inject those values into structs with correspondingly typed fields.
 
-Please see [the documentation] for lots of usage examples.
+Please see [the documentation] for more usage examples.
 
 [the documentation]: https://godoc.org/github.com/samsalisbury/psyringe
 
@@ -101,7 +92,7 @@ Sometimes, you may need to inject more than one value of the same type. For exam
 type Something struct { Name, Desc string }
 ```
 
-As it stands, psyringe would be unable to inject `Name` and `Desc` with different values, since a psyringe can only inject a single value of each type, and they are both `string`. However, by using an under-used feature of Go, [named types], it is possible to inject different values:
+As it stands, psyringe would be unable to inject `Name` and `Desc` with different values, since a psyringe can only inject a single value of each type, and they are both `string`. However, by using different [named types], it is possible to inject different values:
 
 ```go
 type Something struct {
@@ -119,7 +110,7 @@ Using these named types can also improve the readability of your code in many ca
 
 #### Scopes
 
-If you need values with different scopes (a.k.a. lifetimes), then you can use multiple psyringes, one for each scope. This allows you to preciesly control value lifetimes using normal Go code. There is one method added to support this use case: `Clone()`. The main use of `Clone` is to generate a fresh psyringe based on the constructors and values of one you've already defined. This is computationally cheaper than filling a blank psyringe from scratch. See this example HTTP server below:
+If you need values with different scopes, then you can use multiple Psyringes, one for each scope. This allows you to precisely control value lifetimes using normal Go code. There is one method which supports this use case: `Clone`. The main use of `Clone` is to generate a fresh psyringe based on the constructors and values of one you've already defined. This is cheaper than filling a blank psyringe from scratch. See this example HTTP server below:
 
 ```go
 var appScopedPsyringe, requestScopedPsyringe psyringe.Psyringe
@@ -168,11 +159,13 @@ func HandleHTTPRequest(w http.ResponseWriter, r *http.Request) {
 
 Each item you pass into `Add` or `New` is analysed to see whether or not it is a [constructor]. If it is a constructor, then the type of its first return value is registered as its [injection type]. Otherwise the item is considered to be a _value_ and its own type is used as its injection type. Your psyringe knows how to inject values of each registered injection type.
 
-When you call `Inject(&someStruct)`, each field in someStruct is populated with an item of the corresponding injection type from the psyringe. For constructors, it will call that constructor exactly once to generate its value, if needed. For non-constructor values that were passed in to the `Psyringe`, it will simply inject that value when called to.
+All the constructors together form a dependency graph, where each parameter in each constructor needs a corresponding constructor or value in the same psyringe in order for it to be successfully invoked. You can call `Psyringe.Test` to check that all constructor parameters are satisfied within a Psyringe.
 
-Each parameter in a constructor will need to also be available in the psyringe, in order for that constructor to be successfully invoked. If not, `.Inject` will return an error.
+When you call `p.Inject(&someStruct)`, each field in `someStruct` is populated with an item of the corresponding injection type from the `Psyringe` `p`. For constructors, it will call that constructor exactly once to generate its value, if needed. For non-constructor values that were passed in to `p`, it will simply inject that value when called to.
 
-Likewise, if the constructor is successfully invoked, but returns a non-nil error as its second return value, then `.Inject` will return the first such error encountered.
+For each constructor parameter in each constructor, you will need to `Add`, in order for that constructor to be successfully invoked. If not, `Inject` will return an error.
+
+Likewise, if the constructor is successfully _invoked_, but returns an error as its second return value, then `Inject` will return the first such error encountered. Thus you can return meaningful errors from your constructors, and handle them in one place in your app.
 
 [injection type]: #injection-types
 [constructor]: #constructors
@@ -198,10 +191,10 @@ Just to clarify: `Anything` means literally any type, and in the signatures abov
     func(string, io.Reader, io.Writer) interface{}
     func(string, io.Reader, io.Writer) (interface{}, error)
 
-If you need to inject a function which has a constructor's signature, you'll need to create a constructor that returns that function. For example, for an value with injection type `func(int) (int, error)`, you would need to create a func to return that:
+If you need to inject a function which has a constructor's signature, you'll need to create a constructor that returns that function. For example, for a value with injection type `func(int) (int, error)`, you would need to create a func to return that func, otherwise psyringe will think it's a constructor for int.
 
 ```go
-newFunc() func(int) (int, error) {
+func newFunc() func(int) (int, error) {
 	return func(int) (int, error) { return 0, nil }
 }
 ```
