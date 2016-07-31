@@ -44,17 +44,22 @@ func Example() {
 
 ## Features
 
-- **Concurrent, lazy initialisation:** with no extra work on your part.
+- **[Concurrent initialisation]:** with no extra work on your part.
 - **[No tags]:** keep your code clean and readable.
 - **[Simple API]:** usually only needs two calls: `p := psyringe.New()` and `p.Inject()`
 - **[Supports advanced use cases]:** e.g. [scopes], [named instances], debugging
 
+[Concurrent initialisation]: #concurrent-initialisation
 [No tags]: #no-tags
 [Simple API]: #simple-api
 [Supports advanced use cases]: #advanced-uses
 
 [scopes]: #scopes
 [named instances]: #named-instances
+
+### Concurrent Initialisation
+
+A dependency graph already contains enough information to know which parts can be run concurrently: Any two dependencies in the graph that do not have a line between them can be generated at the same time. Psyringe uses this fact to ask every constructor in the graph to execute at the same time, using channels internally to pipe the results of each successful constructor to all the other constructors that need its generated value. The beauty of Go's channel primitives mean this graph is determined implicitly without any heavy analysis.
 
 ### No Tags
 
