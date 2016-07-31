@@ -1,6 +1,6 @@
 # psyringe [![CircleCI](https://circleci.com/gh/samsalisbury/psyringe.svg?style=svg)](https://circleci.com/gh/samsalisbury/psyringe) [![GoDoc](https://img.shields.io/badge/GoDoc-Documented-blue.svg)](https://godoc.org/github.com/samsalisbury/psyringe) [![codecov](https://codecov.io/gh/samsalisbury/psyringe/branch/master/graph/badge.svg)](https://codecov.io/gh/samsalisbury/psyringe)
 
-Psyringe is a fast, **p**arallel, [lazy], easy to use [dependency injector] for [Go].
+Psyringe is a [fast], **p**arallel, [lazy], easy to use [dependency injector] for [Go].
 
 ```go
 //file: example_test.go
@@ -27,13 +27,14 @@ func Example() {
 }
 ```
 
-Fully [documented at GoDoc.org].
+[Fully documented at GoDoc.org].
 
 [lazy]: https://en.wikipedia.org/wiki/Lazy_initialization
 [dependency injector]: https://en.wikipedia.org/wiki/Dependency_injection
 [Go]: https://golang.org
 [simple usage example]: #simple-usage-example
-[documented at GoDoc.org]: https://godoc.org/github.com/samsalisbury/psyringe
+[Fully documented at GoDoc.org]: https://godoc.org/github.com/samsalisbury/psyringe
+[fast]: ./bench_test.go
 
 ## Features
 
@@ -49,27 +50,23 @@ Fully [documented at GoDoc.org].
 [scopes]: #scopes
 [named instances]: #named-instances
 
-### Example code.
-
-Value graphs are populated recursively, and concurrently where the structure allows.
-
 ### No Tags
 
 Unlike most dependency injectors for Go, this one does not require you to litter your structs with tags. Instead, it relies on well-written Go code to perform injection based solely on the types of your struct fields and constructor parameters.
 
 ### Simple API
 
-Psyringe follows through on its metaphor. You `Add` things to the psyringe, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like scoping yourself. For example, you can create multiple psyringes and have each of them inject different dependencies into the same struct.
+Psyringe follows through on its metaphor. You `Add` things to the psyringe, then you `Inject` them into other things. Psyringe does not try to provide any other features, but instead makes it easy to implement more advanced features like scoping yourself. For example, you can create multiple Psyringes and have each of them inject different dependencies into the same struct.
 
 ### Advanced Uses
 
-Although the API is simple, and doesn't explicitly support scopes or named instances, these things are trivial to implement yourself. For example, scopes can be created by using multiple psyringes, one at application level, and another within a http request, for example. See a complete example HTTP server using multiple scopes, below.
+Although the API is simple, and doesn't explicitly support scopes or named instances, these things are trivial to implement yourself. For example, scopes can be created by using multiple Psyringes, one at application level, and another within a http request, for example. See a complete example HTTP server using multiple scopes, below.
 
 Likewise, named instances (i.e. multiple different instances of the same type) can be created by aliasing the type name, or wrapping it in a struct.
 
 ### Why "psyringe"?
 
-psyringe is a _parallel syringe_ which automatically injects multiple values simultaneously, based on the needs of your interdependent constructors.
+Psyringe is a _parallel syringe_ which automatically injects values concurrently, based on the needs of your interdependent constructors.
 
 ## Usage
 
