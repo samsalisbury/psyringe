@@ -104,7 +104,7 @@ func BenchmarkNewMustInject_WorstCase(b *testing.B) {
 	S = BenchStruct{}
 	for i := 0; i < b.N; i++ {
 		P = New(worstCaseConstructors...)
-		P.Inject(&S)
+		P.MustInject(&S)
 	}
 }
 

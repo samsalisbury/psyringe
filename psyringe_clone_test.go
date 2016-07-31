@@ -36,9 +36,9 @@ func TestPsyringe_Clone(t *testing.T) {
 	// Inject 999 times using the original psyringe, the string should still be
 	// #1 since the string constructor is called only once for that psyringe.
 	for i := 0; i < 999; i++ {
-		original.Inject(&ns)
+		original.MustInject(&ns)
 	}
-	original.Inject(&ns)
+	original.MustInject(&ns)
 	expected := "#1"
 	if ns.String != expected {
 		t.Fatalf("got %q; want %q", ns.String, expected)
@@ -47,7 +47,7 @@ func TestPsyringe_Clone(t *testing.T) {
 	// Now inject using the clone 999 times, this time the string should be
 	// #2 because we called the clone's constructor, but only once.
 	for i := 0; i < 999; i++ {
-		clone1.Inject(&ns)
+		clone1.MustInject(&ns)
 	}
 	expected = "#2"
 	if ns.String != expected {
@@ -55,14 +55,14 @@ func TestPsyringe_Clone(t *testing.T) {
 	}
 
 	// For fun, let's inject with the original Psyringe again...
-	original.Inject(&ns)
+	original.MustInject(&ns)
 	expected = "#1"
 	if ns.String != expected {
 		t.Fatalf("got %q; want %q", ns.String, expected)
 	}
 
 	// Inject with the second clone.
-	clone2.Inject(&ns)
+	clone2.MustInject(&ns)
 	expected = "#3"
 	if ns.String != expected {
 		t.Fatalf("got %q; want %q", ns.String, expected)
