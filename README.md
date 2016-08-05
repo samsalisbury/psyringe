@@ -219,6 +219,7 @@ func newFunc() func(int) (int, error) {
   (The benchmarks imply this is relatively expensive still, may be
   worth caching injection plan per target type, for use in cloned
   Psyringes.)
+- Add support for injection cancellation, maybe with golang.org/x/net/context 
 - Find other benchmarks to compare with.
 - Add Even Lazier TM injection using struct func fields.
 - Add Windows build with AppVeyor 
