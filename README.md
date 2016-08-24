@@ -213,6 +213,7 @@ func newFunc() func(int) (int, error) {
 
 # TODO
 
+- Add dependency cycle detection.
 - Add examples for: New, Add, Clone, Inject
 - Add HTTP server example
 - Make injection more efficient.

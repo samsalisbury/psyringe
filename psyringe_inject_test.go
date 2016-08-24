@@ -276,3 +276,25 @@ func TestPsyringe_Inject_dependencyTreeErrors(t *testing.T) {
 		t.Fatalf("got %q; want %q", actual, expected)
 	}
 }
+
+func TestPsyringe_Inject_dependencyCycle(t *testing.T) {
+	t.Skipf("This new test currently fails as we have no cycle detection.")
+	type A struct{}
+	type B struct{}
+	type C struct{ A }
+	newA := func(b B) A { return A{} }
+	newB := func(a A) B { return B{} }
+	p := New(newA, newB)
+	done := make(chan struct{})
+	go func() {
+		defer func() {
+			if err := recover(); err == nil {
+				t.Fatal("expected panic")
+			}
+			close(done)
+		}()
+		p.Inject(&C{})
+		close(done)
+	}()
+	<-done
+}
