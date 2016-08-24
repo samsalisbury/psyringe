@@ -52,6 +52,7 @@ package psyringe
 import (
 	"fmt"
 	"reflect"
+	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -177,12 +178,46 @@ func (p *Psyringe) MustInject(targets ...interface{}) {
 }
 
 // Test checks that all constructors' parameters are satisfied within this
-// Psyringe. This method can be used in your own tests to ensure you have a
-// complete graph.
+// Psyringe, and that there are no dependency cycles.
+// This method can be used in your own tests to ensure you have a complete
+// acyclic graph. Generally it is not recommended to use Test outside of your
+// tests, as it is not built for speed.
 func (p *Psyringe) Test() error {
-	for _, c := range p.ctors {
+	// Sort constructors for consistent output.
+	types := make([]reflect.Type, len(p.ctors))
+	i := 0
+	for t := range p.ctors {
+		types[i] = t
+		i++
+	}
+	sort.Sort(byName(types))
+	for _, outType := range types {
+		c := p.ctors[outType]
 		if err := c.testParametersAreRegisteredIn(p); err != nil {
 			return errors.Wrapf(err, "unable to satisfy constructor %s", c.funcType)
+		}
+		if err := p.detectCycle(outType, c); err != nil {
+			return errors.Wrapf(err, "dependency cycle: %s depends on", c.outType)
+		}
+	}
+	return nil
+}
+
+type byName []reflect.Type
+
+func (ts byName) Len() int           { return len(ts) }
+func (ts byName) Less(i, j int) bool { return ts[i].Name() < ts[j].Name() }
+func (ts byName) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }
+
+func (p *Psyringe) detectCycle(rootType reflect.Type, c *ctor) error {
+	for _, inType := range c.inTypes {
+		if inType == rootType {
+			return errors.Errorf("%s", rootType)
+		}
+		if inCtor, ok := p.ctors[inType]; ok {
+			if err := p.detectCycle(rootType, inCtor); err != nil {
+				return errors.Wrapf(err, "%s depends on", inType)
+			}
 		}
 	}
 	return nil
