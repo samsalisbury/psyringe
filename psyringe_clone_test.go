@@ -27,9 +27,19 @@ func TestPsyringe_Clone(t *testing.T) {
 		},
 	)
 
+	var thingToInject = func() interface{} { return nil }
+
 	// Create a couple of clones.
 	clone1 := original.Clone()
 	clone2 := clone1.Clone()
+
+	// Add the same thing to both.
+	clone1.Add(thingToInject)
+	clone2.Add(thingToInject)
+
+	// Add different things with same injection type to both.
+	clone1.Add(func() func() { return nil })
+	clone2.Add(func() func() { return nil })
 
 	ns := TestCloneNeedsString{}
 
