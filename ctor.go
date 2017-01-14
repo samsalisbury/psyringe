@@ -61,12 +61,6 @@ func newCtor(t reflect.Type, v reflect.Value) *ctor {
 	}
 }
 
-func (c ctor) clone() *ctor {
-	c.once = &sync.Once{}
-	c.errChan = make(chan error)
-	return &c
-}
-
 func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 	for paramIndex, paramType := range c.inTypes {
 		if err := s.testValueOrConstructorIsRegistered(paramType); err != nil {

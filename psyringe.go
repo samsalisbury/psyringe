@@ -136,7 +136,7 @@ func (p *Psyringe) Clone() *Psyringe {
 	q.values = map[reflect.Type]reflect.Value{}
 	q.injectionTypes = map[reflect.Type]struct{}{}
 	for t, c := range p.ctors {
-		q.ctors[t] = c.clone()
+		q.ctors[t] = c
 	}
 	for t, v := range p.values {
 		q.values[t] = v
