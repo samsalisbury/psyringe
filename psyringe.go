@@ -136,7 +136,15 @@ func (p *Psyringe) Clone() *Psyringe {
 	q.values = map[reflect.Type]reflect.Value{}
 	q.injectionTypes = map[reflect.Type]struct{}{}
 	for t, c := range p.ctors {
-		q.ctors[t] = c.clone()
+		if c.value != nil {
+			// This constructor has been called,
+			// so just add its value to the clone.
+			q.values[t] = *c.value
+		} else {
+			// This constructor has not been called,
+			// so clone it.
+			q.ctors[t] = c.clone()
+		}
 	}
 	for t, v := range p.values {
 		q.values[t] = v
