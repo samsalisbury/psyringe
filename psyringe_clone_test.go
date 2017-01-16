@@ -79,3 +79,53 @@ func TestPsyringe_Clone(t *testing.T) {
 	}
 
 }
+
+func TestPsyringe_Clone_identity(t *testing.T) {
+	var target struct {
+		StringPtr *string
+	}
+	var ctor = func() *string { s := "A String."; return &s }
+
+	p := New(ctor)
+	clone1, clone2 := p.Clone(), p.Clone()
+
+	// clone1 and clone2 should inject different string pointers...
+	clone1.Inject(&target)
+	sp1 := target.StringPtr
+	clone2.Inject(&target)
+	sp2 := target.StringPtr
+
+	if sp1 == sp2 {
+		t.Errorf("clones injected the same pointer when they shouldn't")
+	}
+
+	clone1.MustInject(&target)
+	sp11 := target.StringPtr
+	clone2.MustInject(&target)
+	sp22 := target.StringPtr
+
+	if sp11 != sp1 {
+		t.Errorf("cloned psyringe is not stable, ctor called twice")
+	}
+	if sp22 != sp2 {
+		t.Errorf("cloned psyringe is not stable, ctor called twice")
+	}
+
+	// Now clone the clones after Inject was called, should still be stable.
+	clone11 := clone1.Clone()
+	clone22 := clone2.Clone()
+
+	clone11.MustInject(&target)
+	sp111 := target.StringPtr
+	clone22.MustInject(&target)
+	sp222 := target.StringPtr
+
+	if sp111 != sp11 {
+		t.Errorf("Clone after Inject did not clone the value")
+	}
+
+	if sp222 != sp22 {
+		t.Errorf("Clone after Inject did not clone the value")
+	}
+
+}
