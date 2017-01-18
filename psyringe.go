@@ -61,6 +61,7 @@ import (
 // Psyringe is a dependency injection container.
 type Psyringe struct {
 	parent         *Psyringe
+	scope          string
 	values         map[reflect.Type]reflect.Value
 	ctors          map[reflect.Type]*ctor
 	injectionTypes map[reflect.Type]struct{}
@@ -81,6 +82,7 @@ func New(constructorsAndValues ...interface{}) *Psyringe {
 // useful if you are dynamically generating the arguments.
 func NewErr(constructorsAndValues ...interface{}) (*Psyringe, error) {
 	p := &Psyringe{
+		scope:          "<root>",
 		values:         map[reflect.Type]reflect.Value{},
 		ctors:          map[reflect.Type]*ctor{},
 		injectionTypes: map[reflect.Type]struct{}{},
@@ -230,6 +232,7 @@ func (p *Psyringe) Test() error {
 func (p *Psyringe) Scope(name string) (child *Psyringe) {
 	q := New()
 	q.parent = p
+	q.scope = name
 	return q
 }
 
@@ -330,9 +333,28 @@ func (p *Psyringe) addValue(t reflect.Type, v reflect.Value) error {
 	return p.registerInjectionType(t)
 }
 
+func (p *Psyringe) injectionTypeIsRegisteredAtThisScope(t reflect.Type) bool {
+	_, registered := p.injectionTypes[t]
+	return registered
+}
+
+func (p *Psyringe) injectionTypeRegistrationScope(t reflect.Type) (string, bool) {
+	if p.injectionTypeIsRegisteredAtThisScope(t) {
+		return p.scope, true
+	}
+	if p.parent == nil {
+		return "", false
+	}
+	return p.parent.injectionTypeRegistrationScope(t)
+}
+
 func (p *Psyringe) registerInjectionType(t reflect.Type) error {
-	if _, alreadyRegistered := p.injectionTypes[t]; alreadyRegistered {
-		return fmt.Errorf("injection type %s already registered", t)
+	if scope, registered := p.injectionTypeRegistrationScope(t); registered {
+		message := fmt.Sprintf("injection type %s already registered", t)
+		if scope == p.scope {
+			return errors.New(message)
+		}
+		return fmt.Errorf("%s (scope %s)", message, scope)
 	}
 	p.injectionTypes[t] = struct{}{}
 	return nil

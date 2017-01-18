@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestScope(t *testing.T) {
+func TestPsyringe_Scope_happy_path(t *testing.T) {
 
 	var rootCounter, childCounter Counter
 
@@ -69,4 +69,18 @@ func TestScope(t *testing.T) {
 		}
 	}
 
+}
+
+func TestPsyringe_Scope_error_addTypeAlreadyInParent(t *testing.T) {
+	root := New("some string")
+	child := root.Scope("child")
+	expected := `adding string value failed: injection type string already registered (scope <root>)`
+	err := child.AddErr("another string")
+	if err == nil {
+		t.Fatalf("got nil; want error %q", expected)
+	}
+	actual := err.Error()
+	if actual != expected {
+		t.Errorf("got error %q; want %q", actual, expected)
+	}
 }
