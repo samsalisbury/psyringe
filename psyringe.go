@@ -231,6 +231,9 @@ func (p *Psyringe) Test() error {
 // Scope panics if the name is already used by this psyringe's parents, or any
 // of its parents, recursively.
 func (p *Psyringe) Scope(name string) (child *Psyringe) {
+	if p.scopeNameInUse(name) {
+		panic(fmt.Errorf("scope %q already defined", name))
+	}
 	q := New()
 	q.parent = p
 	q.scope = name
@@ -347,6 +350,16 @@ func (p *Psyringe) injectionTypeRegistrationScope(t reflect.Type) (string, bool)
 		return "", false
 	}
 	return p.parent.injectionTypeRegistrationScope(t)
+}
+
+func (p *Psyringe) scopeNameInUse(name string) bool {
+	if p.scope == name {
+		return true
+	}
+	if p.parent == nil {
+		return false
+	}
+	return p.parent.scopeNameInUse(name)
 }
 
 func (p *Psyringe) registerInjectionType(t reflect.Type) error {

@@ -84,3 +84,26 @@ func TestPsyringe_Scope_error_addTypeAlreadyInParent(t *testing.T) {
 		t.Errorf("got error %q; want %q", actual, expected)
 	}
 }
+
+func TestPsyringe_Scope_error_nonUniqueScopeName(t *testing.T) {
+	var recovered interface{}
+	root := New()
+	func() {
+		defer func() {
+			recovered = recover()
+		}()
+		// <root> is a special name given to the psyringe created with New.
+		root.Scope("<root>")
+	}()
+	if recovered == nil {
+		t.Fatalf("did not panic")
+	}
+	err, ok := recovered.(error)
+	if !ok {
+		t.Fatalf("panicked with a %T; want an error", recovered)
+	}
+	expected := `scope "<root>" already defined`
+	if err == nil {
+		t.Fatalf("got nil; want error %q", expected)
+	}
+}
