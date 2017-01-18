@@ -91,8 +91,9 @@ func NewErr(constructorsAndValues ...interface{}) (*Psyringe, error) {
 }
 
 // Add adds constructors and values to the Psyringe. It panics if any
-// pair of constructors and values have the same injection type. See package
-// documentation for definition of "injection type".
+// constructor or value has the same injection type as any other already Added
+// to this Psyringe or its ancestors (see Scope). See package documentation for
+// definition of "injection type".
 //
 // Add uses reflection to determine whether each passed value is a constructor
 // or not. For each constructor, it then generates a generic function in terms
@@ -227,8 +228,8 @@ func (p *Psyringe) Test() error {
 // request cheaply, whilst allowing those constructors access to all the values
 // in the parent graph, p.
 //
-// You cannot Add an injection type to child that is already registered in child
-// or its parent, this holds recursively.
+// Scope panics if the name is already used by this psyringe's parents, or any
+// of its parents, recursively.
 func (p *Psyringe) Scope(name string) (child *Psyringe) {
 	q := New()
 	q.parent = p
