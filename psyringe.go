@@ -215,6 +215,21 @@ func (p *Psyringe) Test() error {
 	return nil
 }
 
+// Scope creates a child psyringe with p as its parent. Calls to Clone on this
+// Psyringe will clone everything added directly to the child, but they will all
+// share a reference to p. The name parameter is used for error messages only,
+// to aid debugging.
+//
+// One use of Scope is to allow per-request constructors to be cloned on each
+// request cheaply, whilst allowing those constructors access to all the values
+// in the parent graph, p.
+//
+// You cannot Add an injection type to child that is already registered in child
+// or its parent, this holds recursively.
+func (p *Psyringe) Scope(name string) (child *Psyringe) {
+	return p
+}
+
 type byName []reflect.Type
 
 func (ts byName) Len() int           { return len(ts) }
