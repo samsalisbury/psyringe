@@ -6,14 +6,14 @@ import (
 )
 
 // Counter wraps an int64 and provides methods for atomically incrementing and
-// reading that value.
+// reading that value. It is used in tests only.
 type Counter struct {
 	value int64
 }
 
-// Increment atomically adds one to the counter.
-func (c *Counter) Increment() {
-	atomic.AddInt64(&c.value, 1)
+// Increment atomically adds one to the counter and returns its new value.
+func (c *Counter) Increment() int64 {
+	return atomic.AddInt64(&c.value, 1)
 }
 
 // Value atomically gets the current value of the counter.
