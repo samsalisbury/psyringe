@@ -60,6 +60,7 @@ import (
 
 // Psyringe is a dependency injection container.
 type Psyringe struct {
+	parent         *Psyringe
 	values         map[reflect.Type]reflect.Value
 	ctors          map[reflect.Type]*ctor
 	injectionTypes map[reflect.Type]struct{}
@@ -227,7 +228,9 @@ func (p *Psyringe) Test() error {
 // You cannot Add an injection type to child that is already registered in child
 // or its parent, this holds recursively.
 func (p *Psyringe) Scope(name string) (child *Psyringe) {
-	return p
+	q := New()
+	q.parent = p
+	return q
 }
 
 type byName []reflect.Type
@@ -289,14 +292,20 @@ func (p *Psyringe) inject(target interface{}) error {
 
 func (p *Psyringe) getValueForStructField(t reflect.Type, name string) (reflect.Value, bool, error) {
 	if v, ok := p.values[t]; ok {
+		// We have a value, return it.
 		return v, true, nil
 	}
-	c, ok := p.ctors[t]
-	if !ok {
-		return reflect.Value{}, false, nil
+	if c, ok := p.ctors[t]; ok {
+		// We have a constructor, call it.
+		v, err := c.getValue(p)
+		return v, true, errors.Wrapf(err, "getting field %s (%s) failed", name, t)
 	}
-	v, err := c.getValue(p)
-	return v, true, errors.Wrapf(err, "getting field %s (%s) failed", name, t)
+	if p.parent != nil {
+		// We have a parent, so try to get the value from there.
+		return p.parent.getValueForStructField(t, name)
+	}
+	// We have no value, constructor, nor parent. Give up.
+	return reflect.Value{}, false, nil
 }
 
 func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
