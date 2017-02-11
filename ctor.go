@@ -79,13 +79,13 @@ func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 }
 
 func (c *ctor) getValue(p *Psyringe) (reflect.Value, error) {
-	go c.once.Do(func() { c.manifest(p) })
-	if err := <-c.errChan; err != nil {
-		return reflect.Value{},
-			errors.Wrapf(err, "invoking %s constructor (%s) failed",
-				c.outType, c.funcType)
+	c.once.Do(func() { go c.manifest(p) })
+	err := <-c.errChan
+	if err == nil {
+		return *c.value, nil
 	}
-	return *c.value, nil
+	const format = "invoking %s constructor (%s) failed"
+	return reflect.Value{}, errors.Wrapf(err, format, c.outType, c.funcType)
 }
 
 // manifest is called exactly once for each constructor to generate its value.
