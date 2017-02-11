@@ -213,8 +213,14 @@ func newFunc() func(int) (int, error) {
 
 # TODO
 
-- Add examples for: New, Add, Clone, Inject
-- Add HTTP server example
+- Remove support for adding non-constructors to the psyringe. This is the biggest
+  source of confusion for users of the package, and whilst convenient when
+  understood, is more of a pain than it's worth. Constructors are explicit about
+  their type, whereas values passed under the cover of interfaces stand for the
+  underlying value rather than the type of the interface passed, much to many
+  people's surprise.
+- Add examples for: New, Add, Clone, Inject, Scope
+- Add HTTP server example.
 - Make injection more efficient.
   (The benchmarks imply this is relatively expensive still, may be
   worth caching injection plan per target type, for use in cloned
