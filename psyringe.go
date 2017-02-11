@@ -246,15 +246,19 @@ func (ts byName) Len() int           { return len(ts) }
 func (ts byName) Less(i, j int) bool { return ts[i].Name() < ts[j].Name() }
 func (ts byName) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }
 
+// detectCycle returns an error if constructing rootType depends on rootType
+// transitively.
 func (p *Psyringe) detectCycle(rootType reflect.Type, c *ctor) error {
 	for _, inType := range c.inTypes {
 		if inType == rootType {
 			return errors.Errorf("%s", rootType)
 		}
-		if inCtor, ok := p.ctors[inType]; ok {
-			if err := p.detectCycle(rootType, inCtor); err != nil {
-				return errors.Wrapf(err, "%s depends on", inType)
-			}
+		inCtor, ok := p.ctors[inType]
+		if !ok {
+			continue
+		}
+		if err := p.detectCycle(rootType, inCtor); err != nil {
+			return errors.Wrapf(err, "%s depends on", inType)
 		}
 	}
 	return nil
