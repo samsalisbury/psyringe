@@ -22,27 +22,28 @@ type ctor struct {
 // terror is the type "error"
 var terror = reflect.TypeOf((*error)(nil)).Elem()
 
-func newCtor(t reflect.Type, v reflect.Value) *ctor {
-	if t.Kind() != reflect.Func || t.IsVariadic() {
+// newCtor creates a new ctor for the return type of constructor.
+func newCtor(constructor reflect.Type, v reflect.Value) *ctor {
+	if constructor.Kind() != reflect.Func || constructor.IsVariadic() {
 		return nil
 	}
-	numOut := t.NumOut()
-	if numOut == 0 || numOut > 2 || (numOut == 2 && t.Out(1) != terror) {
+	numOut := constructor.NumOut()
+	if numOut == 0 || numOut > 2 || (numOut == 2 && constructor.Out(1) != terror) {
 		return nil
 	}
-	outType := t.Out(0)
-	numIn := t.NumIn()
+	outType := constructor.Out(0)
+	numIn := constructor.NumIn()
 	inTypes := make([]reflect.Type, numIn)
 	for i := range inTypes {
-		inTypes[i] = t.In(i)
+		inTypes[i] = constructor.In(i)
 	}
 	construct := func(in []reflect.Value) (reflect.Value, error) {
 		for i, arg := range in {
-			if !arg.IsValid() {
-				return reflect.Value{},
-					fmt.Errorf("unable to create arg %d (%s) of %s constructor",
-						i, inTypes[i], outType)
+			if arg.IsValid() {
+				continue
 			}
+			const format = "unable to create arg %d (%s) of %s constructor"
+			return reflect.Value{}, fmt.Errorf(format, i, inTypes[i], outType)
 		}
 		out := v.Call(in)
 		var err error
@@ -51,8 +52,9 @@ func newCtor(t reflect.Type, v reflect.Value) *ctor {
 		}
 		return out[0], err
 	}
+
 	return &ctor{
-		funcType:  t,
+		funcType:  constructor,
 		outType:   outType,
 		inTypes:   inTypes,
 		construct: construct,
