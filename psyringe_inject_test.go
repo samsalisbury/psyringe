@@ -3,8 +3,12 @@ package psyringe
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/pkg/errors"
 )
 
 type dependent struct {
@@ -275,4 +279,42 @@ func TestPsyringe_Inject_dependencyTreeErrors(t *testing.T) {
 	if actual != expected {
 		t.Fatalf("got %q; want %q", actual, expected)
 	}
+}
+
+func TestPsyringe_Inject_concurrentErrors(t *testing.T) {
+	makeString := func() (*string, error) {
+		time.Sleep(time.Microsecond * 10 * time.Duration(rand.Intn(10)))
+		return nil, fmt.Errorf("this error should always occur")
+	}
+	makeIntFromString := func(s *string) int {
+		t.Fatal("makeIntFromString should not have been called!")
+		return 1
+	}
+	makeByteFromString := func(s *string) byte {
+		t.Fatal("makyByteFromString should not have been called!")
+		return 1
+	}
+
+	type A struct {
+		int
+		byte
+	}
+
+	a := A{}
+
+	t.Log("Running New")
+	p := New(makeString, makeIntFromString, makeByteFromString)
+	t.Log("New Done")
+
+	err := p.Inject(&a)
+	if err == nil {
+		t.Fatalf("got no error")
+	}
+
+	expectedErr := "this error should always occur"
+	actualErr := errors.Cause(err).Error()
+	if actualErr != expectedErr {
+		t.Errorf("got %q; want %q", actualErr, expectedErr)
+	}
+
 }
