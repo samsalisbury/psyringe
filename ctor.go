@@ -12,11 +12,12 @@ import (
 type ctor struct {
 	outType,
 	funcType reflect.Type
-	inTypes   []reflect.Type
-	construct func(in []reflect.Value) (reflect.Value, error)
-	errChan   chan error
-	once      *sync.Once
-	value     *reflect.Value
+	inTypes      []reflect.Type
+	construct    func(in []reflect.Value) (reflect.Value, error)
+	errChan      chan error
+	onceManifest *sync.Once
+	onceResult   *sync.Once
+	value        *reflect.Value
 }
 
 // terror is the type "error"
@@ -54,17 +55,19 @@ func newCtor(constructor reflect.Type, v reflect.Value) *ctor {
 	}
 
 	return &ctor{
-		funcType:  constructor,
-		outType:   outType,
-		inTypes:   inTypes,
-		construct: construct,
-		errChan:   make(chan error),
-		once:      &sync.Once{},
+		funcType:     constructor,
+		outType:      outType,
+		inTypes:      inTypes,
+		construct:    construct,
+		errChan:      make(chan error),
+		onceManifest: &sync.Once{},
+		onceResult:   &sync.Once{},
 	}
 }
 
 func (c ctor) clone() *ctor {
-	c.once = &sync.Once{}
+	c.onceManifest = &sync.Once{}
+	c.onceResult = &sync.Once{}
 	c.errChan = make(chan error)
 	return &c
 }
@@ -79,7 +82,7 @@ func (c *ctor) testParametersAreRegisteredIn(s *Psyringe) error {
 }
 
 func (c *ctor) getValue(p *Psyringe) (reflect.Value, error) {
-	c.once.Do(func() { go c.manifest(p) })
+	c.onceManifest.Do(func() { go c.manifest(p) })
 	err := <-c.errChan
 	if err == nil {
 		return *c.value, nil
@@ -90,7 +93,7 @@ func (c *ctor) getValue(p *Psyringe) (reflect.Value, error) {
 
 // manifest is called exactly once for each constructor to generate its value.
 func (c *ctor) manifest(s *Psyringe) {
-	defer close(c.errChan)
+	defer c.finishWithError(nil)
 	wg := sync.WaitGroup{}
 	numArgs := len(c.inTypes)
 	wg.Add(numArgs)
@@ -101,7 +104,7 @@ func (c *ctor) manifest(s *Psyringe) {
 			defer wg.Done()
 			v, err := s.getValueForConstructor(c, i, t)
 			if err != nil {
-				c.errChan <- err
+				c.finishWithError(err)
 			}
 			args[i] = v
 		}()
@@ -109,7 +112,17 @@ func (c *ctor) manifest(s *Psyringe) {
 	wg.Wait()
 	v, err := c.construct(args)
 	if err != nil {
-		c.errChan <- err
+		c.finishWithError(err)
 	}
 	c.value = &v
+}
+
+func (c *ctor) finishWithError(err error) {
+	c.onceResult.Do(func() {
+		go func() {
+			for {
+				c.errChan <- err
+			}
+		}()
+	})
 }
