@@ -51,6 +51,8 @@ package psyringe
 
 import (
 	"fmt"
+	"log"
+	"os"
 	"reflect"
 	"sort"
 	"sync"
@@ -280,6 +282,7 @@ func (p *Psyringe) inject(target interface{}) error {
 	if v.IsNil() {
 		return fmt.Errorf("target is nil")
 	}
+	debugf("injecting into a %s", ptr)
 	nfs := t.NumField()
 	wg := sync.WaitGroup{}
 	wg.Add(nfs)
@@ -291,7 +294,9 @@ func (p *Psyringe) inject(target interface{}) error {
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, fieldName string) {
 			defer wg.Done()
-			if fv, ok, err := p.getValueForStructField(f.Type(), fieldName); ok && err == nil {
+			fieldType := f.Type()
+			debugf("injecting field %s.%s (%s)", ptr, fieldName, fieldType)
+			if fv, ok, err := p.getValueForStructField(fieldType, fieldName); ok && err == nil {
 				f.Set(fv)
 			} else if err != nil {
 				errs <- err
@@ -320,6 +325,7 @@ func (p *Psyringe) getValueForStructField(t reflect.Type, name string) (reflect.
 }
 
 func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
+	debugf("getting a %s for arg %d for constructor of %s", t, paramIndex, forCtor.outType)
 	if v, ok := p.values[t]; ok {
 		return v, nil
 	}
@@ -386,4 +392,21 @@ func (p *Psyringe) testValueOrConstructorIsRegistered(paramType reflect.Type) er
 		return nil
 	}
 	return errors.Errorf("no constructor or value for %s", paramType)
+}
+
+var debugf = func(string, ...interface{}) {}
+
+const debugFileKey = "PSYRINGE_DEBUG_FILE"
+
+func init() {
+	if debugFile := os.Getenv(debugFileKey); debugFile != "" {
+		if fd, err := os.Create(debugFile); err != nil {
+			log.Printf("psyringe: Unable to open %q (set by %s)", debugFile, debugFileKey)
+		} else {
+			l := log.New(fd, "psyringe: DEBUG: ", log.LstdFlags)
+			debugf = func(format string, a ...interface{}) {
+				l.Printf(format, a...)
+			}
+		}
+	}
 }

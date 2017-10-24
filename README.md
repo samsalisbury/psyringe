@@ -211,6 +211,10 @@ func newFunc() func(int) (int, error) {
 }
 ```
 
+## Troubleshooting
+
+You can get debug output about which types, fields and constructor arguments are being injected into by setting `PSYRINGE_DEBUG_FILE` to a file path you want to write this data to. If this is not set, or is empty then no debug logs are written anywhere.
+
 # TODO
 
 - Remove support for adding non-constructors to the psyringe. This is the biggest
