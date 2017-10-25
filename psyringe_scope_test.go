@@ -2,6 +2,7 @@ package psyringe
 
 import (
 	"fmt"
+	"regexp"
 	"testing"
 )
 
@@ -71,17 +72,20 @@ func TestPsyringe_Scope_happy_path(t *testing.T) {
 
 }
 
+// Note: Brittle test: name of this file and exact line numbers where
+// New("some string") is called are significant.
 func TestPsyringe_Scope_error_addTypeAlreadyInParent(t *testing.T) {
 	root := New("some string")
 	child := root.Scope("child")
-	expected := `adding string value failed: injection type string already registered (scope <root>)`
+	expectedPattern := `^adding string value failed: injection type string already registered at .*/psyringe_scope_test.go:78 \(scope <root>\)$`
+	expected := regexp.MustCompile(expectedPattern)
 	err := child.AddErr("another string")
 	if err == nil {
 		t.Fatalf("got nil; want error %q", expected)
 	}
 	actual := err.Error()
-	if actual != expected {
-		t.Errorf("got error %q; want %q", actual, expected)
+	if !expected.MatchString(actual) {
+		t.Errorf("got error %q; want it to match %q", actual, expectedPattern)
 	}
 }
 
