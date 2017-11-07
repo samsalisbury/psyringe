@@ -14,13 +14,29 @@ func TestHooks_NoValueForStructField(t *testing.T) {
 	}
 
 	testCases := []struct {
-		Desc                   string
-		MakePsyringe           func(Hooks) *Psyringe
-		HandlerError           error
-		Target                 *TestTargetStruct
-		ExpectedTimesCalled    int64
+		// Desc is the description of this test to make which test case is
+		// running clear.
+		Desc string
+		// MakePsyringe is called with the generated hooks (see below).
+		// It must return a Psyringe which will be used to inject into Target.
+		//
+		// Because we pass the hooks, they can be inserted into the scope
+		// hierarchy or otherwise manipulated.
+		MakePsyringe func(Hooks) *Psyringe
+		// HandlerError is returned from the generated NoValueForStructField
+		// func, and we assert that Inject returns this error.
+		HandlerError error
+		// A target to inject into (must be a pointer).
+		Target interface{}
+		// Number of times the generated NoValueForStructFieldFunc should be
+		// called.
+		ExpectedTimesCalled int64
+		// Name of the  parent type when the generated NoValueForStructFieldFunc
+		// is called.
 		ExpectedParentTypeName string
-		ExpectedFieldName      string
+		// Name of the field when the generated NoValueForStructFieldFunc is
+		// called.
+		ExpectedFieldName string
 	}{
 		{
 			Desc: "single empty psyringe",
