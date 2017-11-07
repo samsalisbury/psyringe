@@ -69,6 +69,7 @@ type Psyringe struct {
 	ctors              map[reflect.Type]*ctor
 	injectionTypes     map[reflect.Type]struct{}
 	debugAddedLocation map[reflect.Type]string
+	Hooks              Hooks
 }
 
 // New creates a new Psyringe, and adds the provided constructors and values to
@@ -90,6 +91,7 @@ func newPsyringe() *Psyringe {
 		ctors:              map[reflect.Type]*ctor{},
 		injectionTypes:     map[reflect.Type]struct{}{},
 		debugAddedLocation: map[reflect.Type]string{},
+		Hooks:              newHooks(),
 	}
 }
 
@@ -252,6 +254,7 @@ func (p *Psyringe) Scope(name string) (child *Psyringe) {
 	q := New()
 	q.parent = p
 	q.scope = name
+	q.Hooks = q.parent.Hooks
 	return q
 }
 
@@ -305,21 +308,23 @@ func (p *Psyringe) inject(target interface{}) error {
 		close(errs)
 	}()
 	for i := 0; i < nfs; i++ {
-		go func(f reflect.Value, fieldName string) {
+		go func(f reflect.Value, field reflect.StructField) {
 			defer wg.Done()
-			fieldType := f.Type()
-			debugf("injecting field %s.%s (%s)", ptr, fieldName, fieldType)
-			if fv, ok, err := p.getValueForStructField(fieldType, fieldName); ok && err == nil {
+			debugf("injecting field %s.%s (%s)", ptr, field.Name, field.Type)
+			parentName := fmt.Sprintf("%T", target)
+			if fv, ok, err := p.getValueForStructField(p.Hooks, parentName, field); ok && err == nil {
 				f.Set(fv)
 			} else if err != nil {
 				errs <- err
 			}
-		}(v.Elem().Field(i), t.Field(i).Name)
+		}(v.Elem().Field(i), t.Field(i))
 	}
 	return <-errs
 }
 
-func (p *Psyringe) getValueForStructField(t reflect.Type, name string) (reflect.Value, bool, error) {
+func (p *Psyringe) getValueForStructField(leafHooks Hooks, parentTypeName string, field reflect.StructField) (reflect.Value, bool, error) {
+	t := field.Type
+	name := field.Name
 	if v, ok := p.values[t]; ok {
 		// We have a value, return it.
 		return v, true, nil
@@ -329,12 +334,13 @@ func (p *Psyringe) getValueForStructField(t reflect.Type, name string) (reflect.
 		v, err := c.getValue(p)
 		return v, true, errors.Wrapf(err, "getting field %s (%s) failed", name, t)
 	}
+	// Look in higher scopes.
 	if p.parent != nil {
 		// We have a parent, so try to get the value from there.
-		return p.parent.getValueForStructField(t, name)
+		return p.parent.getValueForStructField(leafHooks, parentTypeName, field)
 	}
 	// We have no value, constructor, nor parent. Give up.
-	return reflect.Value{}, false, nil
+	return reflect.Value{}, false, leafHooks.NoValueForStructField(parentTypeName, field)
 }
 
 func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
