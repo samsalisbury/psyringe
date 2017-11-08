@@ -310,6 +310,10 @@ func (p *Psyringe) inject(target interface{}) error {
 	for i := 0; i < nfs; i++ {
 		go func(f reflect.Value, field reflect.StructField) {
 			defer wg.Done()
+			if field.PkgPath != "" {
+				debugf("not injecting unexported field %s.%s (%s)", ptr, field.Name, field.Type)
+				return
+			}
 			debugf("injecting field %s.%s (%s)", ptr, field.Name, field.Type)
 			parentName := fmt.Sprintf("%T", target)
 			if fv, ok, err := p.getValueForStructField(p.Hooks, parentName, field); ok && err == nil {

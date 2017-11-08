@@ -296,8 +296,8 @@ func TestPsyringe_Inject_concurrentErrors(t *testing.T) {
 	}
 
 	type A struct {
-		int
-		byte
+		Int  int
+		Byte byte
 	}
 
 	a := A{}
