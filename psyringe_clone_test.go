@@ -1,6 +1,9 @@
 package psyringe
 
-import "testing"
+import (
+	"sync"
+	"testing"
+)
 
 type (
 	TestCloneNeedsString struct {
@@ -29,9 +32,31 @@ func TestPsyringe_Clone(t *testing.T) {
 
 	var thingToInject = func() interface{} { return nil }
 
-	// Create a couple of clones.
-	clone1 := original.Clone()
-	clone2 := clone1.Clone()
+	// Create some clones concurrently (this is mainly for the benefit of the
+	// race detector; You should be able to call Clone concurrently.
+	var clone1, clone2, clone3, clone4 *Psyringe
+	var wg sync.WaitGroup
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		clone1 = original.Clone()
+	}()
+	go func() {
+		defer wg.Done()
+		clone2 = original.Clone()
+	}()
+	go func() {
+		defer wg.Done()
+		clone3 = original.Clone()
+	}()
+	go func() {
+		defer wg.Done()
+		clone4 = original.Clone()
+	}()
+	wg.Wait()
+
+	// It's clones all the way down.
+	clone2 = clone1.Clone().Clone().Clone().Clone()
 
 	// Add the same thing to both.
 	clone1.Add(thingToInject)
@@ -101,6 +126,7 @@ func TestPsyringe_Clone_identity(t *testing.T) {
 
 	clone1.MustInject(&target)
 	sp11 := target.StringPtr
+
 	clone2.MustInject(&target)
 	sp22 := target.StringPtr
 

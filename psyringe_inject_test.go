@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"math/rand"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -316,5 +318,39 @@ func TestPsyringe_Inject_concurrentErrors(t *testing.T) {
 	if actualErr != expectedErr {
 		t.Errorf("got %q; want %q", actualErr, expectedErr)
 	}
+
+}
+
+// This test exercises calling inject multiple times on the same psyringe into
+// different struct values. Run tests with -race to see more detail if this test
+// fails.
+func TestPsyringe_Inject_concurrentCalls(t *testing.T) {
+
+	var returnVal int64
+	p := New(func() int64 { return atomic.AddInt64(&returnVal, 1) })
+	type target struct {
+		Int int64
+	}
+	target1 := target{}
+	target2 := target{}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		p.MustInject(&target1)
+		if target1.Int != 1 {
+			t.Fatal("race condition when calling Inject concurrently; run tests with -race to see more detail")
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		p.MustInject(&target2)
+		if target2.Int != 1 {
+			t.Fatal("race condition when calling Inject concurrently; run tests with -race to see more detail")
+		}
+	}()
 
 }

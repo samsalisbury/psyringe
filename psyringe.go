@@ -55,7 +55,6 @@ import (
 	"os"
 	"reflect"
 	"runtime"
-	"sort"
 	"sync"
 
 	"github.com/pkg/errors"
@@ -63,13 +62,10 @@ import (
 
 // Psyringe is a dependency injection container.
 type Psyringe struct {
-	parent             *Psyringe
-	scope              string
-	values             map[reflect.Type]reflect.Value
-	ctors              map[reflect.Type]*ctor
-	injectionTypes     map[reflect.Type]struct{}
-	debugAddedLocation map[reflect.Type]string
-	Hooks              Hooks
+	parent         *Psyringe
+	scope          string
+	injectionTypes injectionTypes
+	Hooks          Hooks
 }
 
 // New creates a new Psyringe, and adds the provided constructors and values to
@@ -86,12 +82,9 @@ func New(constructorsAndValues ...interface{}) *Psyringe {
 // newPsyringe is used to initialise a new Psyringe.
 func newPsyringe() *Psyringe {
 	return &Psyringe{
-		scope:              "<root>",
-		values:             map[reflect.Type]reflect.Value{},
-		ctors:              map[reflect.Type]*ctor{},
-		injectionTypes:     map[reflect.Type]struct{}{},
-		debugAddedLocation: map[reflect.Type]string{},
-		Hooks:              newHooks(),
+		scope:          "<root>",
+		injectionTypes: injectionTypes{},
+		Hooks:          newHooks(),
 	}
 }
 
@@ -153,26 +146,7 @@ func (p *Psyringe) add(thing interface{}) error {
 // calling Add or New repeatedly may get expensive.
 func (p *Psyringe) Clone() *Psyringe {
 	q := *p
-	q.ctors = map[reflect.Type]*ctor{}
-	q.values = map[reflect.Type]reflect.Value{}
-	q.injectionTypes = map[reflect.Type]struct{}{}
-	for t, c := range p.ctors {
-		if c.value != nil {
-			// This constructor has been called,
-			// so just add its value to the clone.
-			q.values[t] = *c.value
-		} else {
-			// This constructor has not been called,
-			// so clone it.
-			q.ctors[t] = c.clone()
-		}
-	}
-	for t, v := range p.values {
-		q.values[t] = v
-	}
-	for t, s := range p.injectionTypes {
-		q.injectionTypes[t] = s
-	}
+	q.injectionTypes = p.injectionTypes.Clone()
 	return &q
 }
 
@@ -216,16 +190,11 @@ func (p *Psyringe) MustInject(targets ...interface{}) {
 // acyclic graph. Generally it is not recommended to use Test outside of your
 // tests, as it is not built for speed.
 func (p *Psyringe) Test() error {
-	// Sort constructors for consistent output.
-	types := make([]reflect.Type, len(p.ctors))
-	i := 0
-	for t := range p.ctors {
-		types[i] = t
-		i++
-	}
-	sort.Sort(byName(types))
-	for _, outType := range types {
-		c := p.ctors[outType]
+	// Get sorted types (as this is a test better to have consistent output).
+	ctors := p.injectionTypes.AddedAsCtors()
+	ctorTypes := ctors.Keys()
+	for _, outType := range ctorTypes {
+		c := ctors[outType].Ctor
 		if err := c.testParametersAreRegisteredIn(p); err != nil {
 			return errors.Wrapf(err, "unable to satisfy constructor %s", c.funcType)
 		}
@@ -271,11 +240,11 @@ func (p *Psyringe) detectCycle(rootType reflect.Type, c *ctor) error {
 		if inType == rootType {
 			return errors.Errorf("%s", rootType)
 		}
-		inCtor, ok := p.ctors[inType]
+		inCtor, ok := p.injectionTypes.AddedAsCtors()[inType]
 		if !ok {
 			continue
 		}
-		if err := p.detectCycle(rootType, inCtor); err != nil {
+		if err := p.detectCycle(rootType, inCtor.Ctor); err != nil {
 			return errors.Wrapf(err, "%s depends on", inType)
 		}
 	}
@@ -329,13 +298,13 @@ func (p *Psyringe) inject(target interface{}) error {
 func (p *Psyringe) getValueForStructField(leafHooks Hooks, parentTypeName string, field reflect.StructField) (reflect.Value, bool, error) {
 	t := field.Type
 	name := field.Name
-	if v, ok := p.values[t]; ok {
+	if v, ok := p.injectionTypes.AddedAsValues()[t]; ok {
 		// We have a value, return it.
-		return v, true, nil
+		return v.Value, true, nil
 	}
-	if c, ok := p.ctors[t]; ok {
+	if c, ok := p.injectionTypes.AddedAsCtors()[t]; ok {
 		// We have a constructor, call it.
-		v, err := c.getValue(p)
+		v, err := c.Ctor.getValue(p)
 		return v, true, errors.Wrapf(err, "getting field %s (%s) failed", name, t)
 	}
 	// Look in higher scopes.
@@ -349,25 +318,23 @@ func (p *Psyringe) getValueForStructField(leafHooks Hooks, parentTypeName string
 
 func (p *Psyringe) getValueForConstructor(forCtor *ctor, paramIndex int, t reflect.Type) (reflect.Value, error) {
 	debugf("getting a %s for arg %d for constructor of %s", t, paramIndex, forCtor.outType)
-	if v, ok := p.values[t]; ok {
-		return v, nil
+	if v, ok := p.injectionTypes.WithRealisedValues()[t]; ok {
+		return v.Value, nil
 	}
-	c, ok := p.ctors[t]
+	c, ok := p.injectionTypes.AddedAsCtors()[t]
 	if !ok {
 		return reflect.Value{}, errors.Errorf("no constructor or value for %s", t)
 	}
-	v, err := c.getValue(p)
+	v, err := c.Ctor.getValue(p)
 	return v, errors.Wrapf(err, "getting argument %d failed", paramIndex)
 }
 
 func (p *Psyringe) addCtor(c *ctor) error {
-	p.ctors[c.outType] = c
-	return p.registerInjectionType(c.outType)
+	return p.registerInjectionType(c.outType, &injectionType{Ctor: c})
 }
 
 func (p *Psyringe) addValue(t reflect.Type, v reflect.Value) error {
-	p.values[t] = v
-	return p.registerInjectionType(t)
+	return p.registerInjectionType(t, &injectionType{Value: v})
 }
 
 func (p *Psyringe) injectionTypeIsRegisteredAtThisScope(t reflect.Type) bool {
@@ -376,7 +343,7 @@ func (p *Psyringe) injectionTypeIsRegisteredAtThisScope(t reflect.Type) bool {
 }
 
 func (p *Psyringe) injectionTypeRegistrationScope(t reflect.Type) (*Psyringe, bool) {
-	if p.injectionTypeIsRegisteredAtThisScope(t) {
+	if p.injectionTypes.Contains(t) {
 		return p, true
 	}
 	if p.parent == nil {
@@ -395,27 +362,23 @@ func (p *Psyringe) scopeNameInUse(name string) bool {
 	return p.parent.scopeNameInUse(name)
 }
 
-func (p *Psyringe) registerInjectionType(t reflect.Type) error {
+func (p *Psyringe) registerInjectionType(t reflect.Type, it *injectionType) error {
 	if scopedPsyringe, registered := p.injectionTypeRegistrationScope(t); registered {
 		message := fmt.Sprintf("injection type %s already registered at %s",
-			t, scopedPsyringe.debugAddedLocation[t])
+			t, scopedPsyringe.injectionTypes[t].DebugAddedLocation)
 		if scopedPsyringe.scope == p.scope {
 			return errors.New(message)
 		}
 		return fmt.Errorf("%s (scope %s)", message, scopedPsyringe.scope)
 	}
-	p.injectionTypes[t] = struct{}{}
 	_, file, line, _ := runtime.Caller(5)
-	p.debugAddedLocation[t] = fmt.Sprintf("%s:%d", file, line)
-
+	it.DebugAddedLocation = fmt.Sprintf("%s:%d", file, line)
+	p.injectionTypes.Add(t, it)
 	return nil
 }
 
 func (p *Psyringe) testValueOrConstructorIsRegistered(paramType reflect.Type) error {
-	if _, constructorExists := p.ctors[paramType]; constructorExists {
-		return nil
-	}
-	if _, valueExists := p.values[paramType]; valueExists {
+	if p.injectionTypes.Contains(paramType) {
 		return nil
 	}
 	return errors.Errorf("no constructor or value for %s", paramType)

@@ -10,14 +10,13 @@ import (
 
 // ctor is a constructor for a single value.
 type ctor struct {
-	outType,
-	funcType reflect.Type
-	inTypes      []reflect.Type
-	construct    func(in []reflect.Value) (reflect.Value, error)
-	errChan      chan error
-	onceManifest *sync.Once
-	onceResult   *sync.Once
-	value        *reflect.Value
+	outType, funcType reflect.Type
+	inTypes           []reflect.Type
+	construct         func(in []reflect.Value) (reflect.Value, error)
+	errChan           chan error
+	onceManifest      *sync.Once
+	onceResult        *sync.Once
+	value             *reflect.Value
 }
 
 // terror is the type "error"
@@ -66,9 +65,11 @@ func newCtor(constructor reflect.Type, v reflect.Value) *ctor {
 }
 
 func (c ctor) clone() *ctor {
-	c.onceManifest = &sync.Once{}
-	c.onceResult = &sync.Once{}
-	c.errChan = make(chan error)
+	if c.value == nil {
+		c.onceManifest = &sync.Once{}
+		c.onceResult = &sync.Once{}
+		c.errChan = make(chan error)
+	}
 	return &c
 }
 

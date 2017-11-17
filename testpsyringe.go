@@ -29,9 +29,6 @@ func (tp *TestPsyringe) Replace(constructorsAndValues ...interface{}) {
 			panic(fmt.Errorf("attempt to replace injection type %s; but no such type added", t))
 		}
 		delete(tp.Psyringe.injectionTypes, t)
-		delete(tp.Psyringe.values, t)
-		delete(tp.Psyringe.debugAddedLocation, t)
-		delete(tp.Psyringe.ctors, t)
 		if err := tp.Psyringe.add(thing); err != nil {
 			panic(err)
 		}
