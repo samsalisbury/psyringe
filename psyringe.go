@@ -198,8 +198,8 @@ func (p *Psyringe) Test() error {
 		if err := c.testParametersAreRegisteredIn(p); err != nil {
 			return errors.Wrapf(err, "unable to satisfy constructor %s", c.funcType)
 		}
-		if err := p.detectCycle(outType, c); err != nil {
-			return errors.Wrapf(err, "dependency cycle: %s depends on", c.outType)
+		if err := p.detectCycle(nil, outType, c); err != nil {
+			return errors.Wrapf(err, "dependency cycle: %s", outType)
 		}
 	}
 	return nil
@@ -233,20 +233,24 @@ func (ts byName) Len() int           { return len(ts) }
 func (ts byName) Less(i, j int) bool { return ts[i].Name() < ts[j].Name() }
 func (ts byName) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }
 
+type stack []reflect.Type
+
 // detectCycle returns an error if constructing rootType depends on rootType
 // transitively.
-func (p *Psyringe) detectCycle(rootType reflect.Type, c *ctor) error {
-	for _, inType := range c.inTypes {
-		if inType == rootType {
-			return errors.Errorf("%s", rootType)
+func (p *Psyringe) detectCycle(s stack, from reflect.Type, c *ctor) error {
+	s = append(s, from)
+	for _, t := range c.inTypes {
+		for _, st := range s {
+			if t == st {
+				return fmt.Errorf("depends on %s", t)
+			}
 		}
-		inCtor, ok := p.injectionTypes.AddedAsCtors()[inType]
+		s := append(s, t)
+		c, ok := p.injectionTypes.AddedAsCtors()[t]
 		if !ok {
 			continue
 		}
-		if err := p.detectCycle(rootType, inCtor.Ctor); err != nil {
-			return errors.Wrapf(err, "%s depends on", inType)
-		}
+		return errors.Wrapf(p.detectCycle(s, t, c.Ctor), "depends on %s", t)
 	}
 	return nil
 }

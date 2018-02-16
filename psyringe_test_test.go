@@ -64,9 +64,9 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	actualErr := err.Error()
-	expectedErr := "dependency cycle: psyringe.A depends on: psyringe.F depends on: psyringe.E depends on: psyringe.D depends on: psyringe.C depends on: psyringe.B depends on: psyringe.A"
+	expectedErr := "dependency cycle: psyringe.A: depends on psyringe.F: depends on psyringe.E: depends on psyringe.D: depends on psyringe.C: depends on psyringe.B: depends on psyringe.A"
 	if actualErr != expectedErr {
-		t.Errorf("got error %q; want %q", actualErr, expectedErr)
+		t.Errorf("got error:\n%q\nwant:\n%q", actualErr, expectedErr)
 	}
 }
 
@@ -92,8 +92,8 @@ func TestPsyringe_Test_dependencyCycle_outer(t *testing.T) {
 		t.Fatal("expected error")
 	}
 	actualErr := err.Error()
-	expectedErr := "dependency cycle: psyringe.A depends on: psyringe.F depends on: psyringe.E depends on: psyringe.D depends on: psyringe.C depends on: psyringe.B depends on: psyringe.A"
+	expectedErr := "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.D: depends on psyringe.E: depends on psyringe.F: depends on psyringe.E"
 	if actualErr != expectedErr {
-		t.Errorf("got error %q; want %q", actualErr, expectedErr)
+		t.Errorf("got error:\n%q\nwant:\n%q", actualErr, expectedErr)
 	}
 }
