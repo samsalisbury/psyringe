@@ -198,6 +198,9 @@ func (p *Psyringe) Test() error {
 		if err := c.testParametersAreRegisteredIn(p); err != nil {
 			return errors.Wrapf(err, "unable to satisfy constructor %s", c.funcType)
 		}
+	}
+	for _, outType := range ctorTypes {
+		c := ctors[outType].Ctor
 		if err := p.detectCycle(nil, outType, c); err != nil {
 			return errors.Wrapf(err, "dependency cycle: %s", outType)
 		}

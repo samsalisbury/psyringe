@@ -2,6 +2,7 @@ package psyringe
 
 import (
 	"bytes"
+	"math/rand"
 	"testing"
 )
 
@@ -44,6 +45,9 @@ func TestPsyringe_Test_missing_injectionType(t *testing.T) {
 
 // TestPsyringe_Test_dependencyCycle checks that all cases of dependency cycles
 // are handled correctly. See testCases for details.
+//
+// Note that these tests also imply that we begin checking cycles on
+// injectionTypes sorted by name.
 func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 	type (
 		A *struct{}
@@ -113,4 +117,75 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 		})
 	}
 
+}
+
+// TestPsyringe_Test_deterministic_output ensures that Test always returns the
+// same error for a given Psyringe. This makes it easier to iteratively correct
+// problems whilst running Test.
+func TestPsyringe_Test_deterministic_output(t *testing.T) {
+	type (
+		A *struct{}
+		B *struct{}
+		C *struct{}
+	)
+
+	// Each test case is run 1000 times try to catch nondeterministic output.
+	// It is possible but statistically quite unlikely for these tests to
+	// pass erroneously.
+	testCases := []struct {
+		desc string
+		// ctors are shuffled before each test
+		ctors   []interface{}
+		wantErr string
+	}{
+		{
+			desc: "missing ctors before cycles",
+			ctors: []interface{}{
+				func(B) C { return nil }, // No ctor for B (Want).
+				func(A) A { return nil }, // A is a self-cycle.
+			},
+			wantErr: "unable to satisfy constructor func(psyringe.B) psyringe.C: unable to satisfy param 0: no constructor or value for psyringe.B",
+		},
+		{
+			desc: "missing ctors sorted",
+			ctors: []interface{}{
+				func(int) A { return nil }, // No ctor for int (want)
+				func(int) B { return nil }, // No ctor for int.
+
+			},
+			wantErr: "unable to satisfy constructor func(int) psyringe.A: unable to satisfy param 0: no constructor or value for int",
+		},
+		{
+			desc: "cycles sorted",
+			ctors: []interface{}{
+				func(A) A { return nil },
+				func(B) B { return nil },
+			},
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			// Run Test and assertions 1000 times each.
+			// This catches random map iterations.
+			for i := 0; i < 1000; i++ {
+				// Shuffle ctors to ensure their order of being added to the
+				// Psyringe is unimportant.
+				for i := range tc.ctors {
+					j := rand.Intn(i + 1)
+					tc.ctors[i], tc.ctors[j] = tc.ctors[j], tc.ctors[i]
+				}
+				p := New(tc.ctors...)
+				err := p.Test()
+				if err == nil {
+					t.Fatalf("iter %d: got nil err; want %q", i, tc.wantErr)
+				}
+				gotErr := err.Error()
+				if gotErr != tc.wantErr {
+					t.Fatalf("iter %d: got error %q; want %q", i, gotErr, tc.wantErr)
+				}
+			}
+		})
+	}
 }
