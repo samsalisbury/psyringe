@@ -69,3 +69,31 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 		t.Errorf("got error %q; want %q", actualErr, expectedErr)
 	}
 }
+
+func TestPsyringe_Test_dependencyCycle_outer(t *testing.T) {
+	type (
+		A *struct{}
+		B *struct{}
+		C *struct{}
+		D *struct{}
+		E *struct{}
+		F *struct{}
+	)
+	p := New(
+		func(B) A { return nil },
+		func(C) B { return nil },
+		func(D) C { return nil },
+		func(E) D { return nil },
+		func(F) E { return nil },
+		func(E) F { return nil },
+	)
+	err := p.Test()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	actualErr := err.Error()
+	expectedErr := "dependency cycle: psyringe.A depends on: psyringe.F depends on: psyringe.E depends on: psyringe.D depends on: psyringe.C depends on: psyringe.B depends on: psyringe.A"
+	if actualErr != expectedErr {
+		t.Errorf("got error %q; want %q", actualErr, expectedErr)
+	}
+}
