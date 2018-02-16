@@ -42,6 +42,8 @@ func TestPsyringe_Test_missing_injectionType(t *testing.T) {
 	}
 }
 
+// TestPsyringe_Test_dependencyCycle checks that all cases of dependency cycles
+// are handled correctly. See testCases for details.
 func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 	type (
 		A *struct{}
@@ -77,6 +79,24 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 				func(A) A { return nil },
 			),
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
+		},
+		{
+			desc: "self cycle at a distance",
+			p: New(
+				func(B) A { return nil },
+				func(C) B { return nil },
+				func(C) C { return nil },
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.C",
+		},
+		{
+			desc: "two self-cycles",
+			p: New(
+				func(B) A { return nil },
+				func(B) B { return nil },
+				func(C) C { return nil }, // This one is not reached.
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.B",
 		},
 	}
 
