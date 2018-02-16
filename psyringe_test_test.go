@@ -5,7 +5,19 @@ import (
 	"testing"
 )
 
-func TestPsyringe_Test_fails(t *testing.T) {
+func TestPsyringe_Test_succeeds(t *testing.T) {
+	if err := New().Test(); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	}
+	newInt := func(b *bytes.Buffer) int { return b.Len() }
+	newString := func(int) string { return "" }
+	aBuffer := &bytes.Buffer{}
+	if err := New(aBuffer, newInt, newString).Test(); err != nil {
+		t.Fatalf("unexpected error %q", err)
+	}
+}
+
+func TestPsyringe_Test_missing_injectionType(t *testing.T) {
 
 	newString := func(*bytes.Buffer) string { return "" }
 	newInt := func() (int, error) { return 1, nil }
@@ -30,70 +42,55 @@ func TestPsyringe_Test_fails(t *testing.T) {
 	}
 }
 
-func TestPsyringe_Test_succeeds(t *testing.T) {
-	if err := New().Test(); err != nil {
-		t.Fatalf("unexpected error %q", err)
-	}
-	newInt := func(b *bytes.Buffer) int { return b.Len() }
-	newString := func(int) string { return "" }
-	aBuffer := &bytes.Buffer{}
-	if err := New(aBuffer, newInt, newString).Test(); err != nil {
-		t.Fatalf("unexpected error %q", err)
-	}
-}
-
 func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 	type (
 		A *struct{}
 		B *struct{}
 		C *struct{}
-		D *struct{}
-		E *struct{}
-		F *struct{}
 	)
-	p := New(
-		func(F) A { return nil },
-		func(A) B { return nil },
-		func(B) C { return nil },
-		func(C) D { return nil },
-		func(D) E { return nil },
-		func(E) F { return nil },
-	)
-	err := p.Test()
-	if err == nil {
-		t.Fatal("expected error")
+	testCases := []struct {
+		desc    string
+		p       *Psyringe
+		wantErr string
+	}{
+		{
+			desc: "full cycle",
+			p: New(
+				func(A) C { return nil },
+				func(B) A { return nil },
+				func(C) B { return nil },
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.A",
+		},
+		{
+			desc: "partial cycle",
+			p: New(
+				func(B) A { return nil },
+				func(C) B { return nil },
+				func(B) C { return nil },
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.B",
+		},
+		{
+			desc: "self cycle",
+			p: New(
+				func(A) A { return nil },
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
+		},
 	}
-	actualErr := err.Error()
-	expectedErr := "dependency cycle: psyringe.A: depends on psyringe.F: depends on psyringe.E: depends on psyringe.D: depends on psyringe.C: depends on psyringe.B: depends on psyringe.A"
-	if actualErr != expectedErr {
-		t.Errorf("got error:\n%q\nwant:\n%q", actualErr, expectedErr)
-	}
-}
 
-func TestPsyringe_Test_dependencyCycle_outer(t *testing.T) {
-	type (
-		A *struct{}
-		B *struct{}
-		C *struct{}
-		D *struct{}
-		E *struct{}
-		F *struct{}
-	)
-	p := New(
-		func(B) A { return nil },
-		func(C) B { return nil },
-		func(D) C { return nil },
-		func(E) D { return nil },
-		func(F) E { return nil },
-		func(E) F { return nil },
-	)
-	err := p.Test()
-	if err == nil {
-		t.Fatal("expected error")
+	for _, tc := range testCases {
+		t.Run(tc.desc, func(t *testing.T) {
+			err := tc.p.Test()
+			if err == nil {
+				t.Fatalf("got nil error; want %q", tc.wantErr)
+			}
+			gotErr := err.Error()
+			if gotErr != tc.wantErr {
+				t.Errorf("got error:\n%q\nwant:\n%q", gotErr, tc.wantErr)
+			}
+		})
 	}
-	actualErr := err.Error()
-	expectedErr := "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.D: depends on psyringe.E: depends on psyringe.F: depends on psyringe.E"
-	if actualErr != expectedErr {
-		t.Errorf("got error:\n%q\nwant:\n%q", actualErr, expectedErr)
-	}
+
 }
