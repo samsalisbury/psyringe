@@ -22,7 +22,9 @@ func (its injectionTypes) Keys() []reflect.Type {
 		types[i] = t
 		i++
 	}
-	sort.Sort(byName(types))
+	sort.Slice(types, func(i, j int) bool {
+		return types[i].Name() < types[j].Name()
+	})
 	return types
 }
 

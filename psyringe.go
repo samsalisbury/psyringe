@@ -227,12 +227,6 @@ func (p *Psyringe) Scope(name string) (child *Psyringe) {
 	return q
 }
 
-type byName []reflect.Type
-
-func (ts byName) Len() int           { return len(ts) }
-func (ts byName) Less(i, j int) bool { return ts[i].Name() < ts[j].Name() }
-func (ts byName) Swap(i, j int)      { ts[i], ts[j] = ts[j], ts[i] }
-
 type stack []reflect.Type
 
 // detectCycle returns an error if constructing rootType depends on rootType
