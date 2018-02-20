@@ -354,3 +354,21 @@ func TestPsyringe_Inject_concurrentCalls(t *testing.T) {
 	}()
 
 }
+
+// TestPsyringe_Inject_scopes tests that dependencies of ctors in the present
+// scope can be satisfied by constructors in higher scopes.
+func TestPsyringe_Inject_scopes(t *testing.T) {
+	type A struct{ Name string }
+	type B struct{ A *A }
+	top := New()
+	top.Add(func(a *A) *B { return &B{A: a} })
+	bottom := top.Scope("bottom")
+	bottom.Add(&A{Name: "Ted"})
+	target := struct{ *B }{}
+	bottom.MustInject(&target)
+	got := target.B.A.Name
+	want := "Ted"
+	if got != want {
+		t.Errorf("got %q; want %q", got, want)
+	}
+}
