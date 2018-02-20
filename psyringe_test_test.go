@@ -53,6 +53,12 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 		A *struct{}
 		B *struct{}
 		C *struct{}
+		D *struct{}
+		E *struct{}
+		F *struct{}
+		G *struct{}
+		H *struct{}
+		I *struct{}
 	)
 	testCases := []struct {
 		desc    string
@@ -85,7 +91,7 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
 		},
 		{
-			desc: "self cycle at a distance",
+			desc: "self cycle from chord",
 			p: New(
 				func(B) A { return nil },
 				func(C) B { return nil },
@@ -101,6 +107,15 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 				func(C) C { return nil }, // This one is not reached.
 			),
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.B",
+		},
+		{
+			desc: "first arg satisfied",
+			p: New(
+				func(B, C) A { return nil },
+				func() B { return nil },
+				func(B, C) C { return nil },
+			),
+			wantErr: "dependency cycle: psyringe.A: depends on psyringe.C: depends on psyringe.C",
 		},
 	}
 

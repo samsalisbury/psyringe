@@ -190,7 +190,7 @@ func (p *Psyringe) MustInject(targets ...interface{}) {
 // acyclic graph. Generally it is not recommended to use Test outside of your
 // tests, as it is not built for speed.
 func (p *Psyringe) Test() error {
-	// Get sorted types (as this is a test better to have consistent output).
+	// Get sorted types - as this is a test better to have consistent output.
 	ctors := p.injectionTypes.AddedAsCtors()
 	ctorTypes := ctors.Keys()
 	for _, outType := range ctorTypes {
@@ -201,7 +201,8 @@ func (p *Psyringe) Test() error {
 	}
 	for _, outType := range ctorTypes {
 		c := ctors[outType].Ctor
-		if err := p.detectCycle(nil, outType, c); err != nil {
+		s := seen{}
+		if err := p.detectCycle(s, c); err != nil {
 			return errors.Wrapf(err, "dependency cycle: %s", outType)
 		}
 	}
@@ -230,24 +231,33 @@ func (p *Psyringe) Scope(name string) (child *Psyringe) {
 	return q
 }
 
-type stack []reflect.Type
+type seen map[reflect.Type]struct{}
+
+func (s seen) clone() seen {
+	t := make(seen, len(s))
+	for k := range s {
+		t[k] = struct{}{}
+	}
+	return t
+}
 
 // detectCycle returns an error if constructing rootType depends on rootType
 // transitively.
-func (p *Psyringe) detectCycle(s stack, from reflect.Type, c *ctor) error {
-	s = append(s, from)
+func (p *Psyringe) detectCycle(s seen, c *ctor) error {
+	// We have now seen the injection type of c.
+	s = s.clone()
+	s[c.outType] = struct{}{}
 	for _, t := range c.inTypes {
-		for _, st := range s {
-			if t == st {
-				return fmt.Errorf("depends on %s", t)
-			}
+		if _, ok := s[t]; ok {
+			return fmt.Errorf("depends on %s", t)
 		}
-		s := append(s, t)
 		c, ok := p.injectionTypes.AddedAsCtors()[t]
 		if !ok {
 			continue
 		}
-		return errors.Wrapf(p.detectCycle(s, t, c.Ctor), "depends on %s", t)
+		if err := p.detectCycle(s, c.Ctor); err != nil {
+			return errors.Wrapf(err, "depends on %s", t)
+		}
 	}
 	return nil
 }
@@ -291,8 +301,10 @@ func (p *Psyringe) inject(target interface{}) error {
 			} else if err != nil {
 				errs <- err
 			}
+			// If !ok there is no value for this field type, that's OK continue.
 		}(v.Elem().Field(i), t.Field(i))
 	}
+
 	return <-errs
 }
 
