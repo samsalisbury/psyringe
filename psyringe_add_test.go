@@ -119,3 +119,22 @@ func TestPsyringe_Add_nil(t *testing.T) {
 		t.Fatalf("got error %q; want error %q", actual, expected)
 	}
 }
+
+func TestPsyringe_Add_cycle(t *testing.T) {
+	type (
+		A *struct{}
+		B *struct{}
+		C *struct{}
+	)
+	want := "adding constructor func(psyringe.A) psyringe.A failed: dependency cycle: psyringe.A: depends on psyringe.A"
+	gotErr := New().AddErr(
+		func(A) A { return nil },
+	)
+	if gotErr == nil {
+		t.Fatalf("got nil error; want %q", want)
+	}
+	got := gotErr.Error()
+	if want != got {
+		t.Errorf("got error %q; want %q", got, want)
+	}
+}
