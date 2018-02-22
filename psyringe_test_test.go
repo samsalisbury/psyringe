@@ -62,66 +62,69 @@ func TestPsyringe_Test_dependencyCycle(t *testing.T) {
 	)
 	testCases := []struct {
 		desc    string
-		p       *Psyringe
+		ctors   []interface{}
 		wantErr string
 	}{
 		{
 			desc: "full cycle",
-			p: New(
+			ctors: []interface{}{
 				func(A) C { return nil },
 				func(B) A { return nil },
 				func(C) B { return nil },
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.A",
 		},
 		{
 			desc: "partial cycle",
-			p: New(
+			ctors: []interface{}{
 				func(B) A { return nil },
 				func(C) B { return nil },
 				func(B) C { return nil },
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.B",
 		},
 		{
 			desc: "self cycle",
-			p: New(
+			ctors: []interface{}{
 				func(A) A { return nil },
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
 		},
 		{
 			desc: "self cycle from chord",
-			p: New(
+			ctors: []interface{}{
 				func(B) A { return nil },
 				func(C) B { return nil },
 				func(C) C { return nil },
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.C: depends on psyringe.C",
 		},
 		{
 			desc: "two self-cycles",
-			p: New(
+			ctors: []interface{}{
 				func(B) A { return nil },
 				func(B) B { return nil },
 				func(C) C { return nil }, // This one is not reached.
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.B: depends on psyringe.B",
 		},
 		{
 			desc: "first arg satisfied",
-			p: New(
+			ctors: []interface{}{
 				func(B, C) A { return nil },
 				func() B { return nil },
 				func(B, C) C { return nil },
-			),
+			},
 			wantErr: "dependency cycle: psyringe.A: depends on psyringe.C: depends on psyringe.C",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.desc, func(t *testing.T) {
-			err := tc.p.Test()
+			p := New()
+			p.allowAddCycle = true
+			p.Add(tc.ctors...)
+			err := p.Test()
 			if err == nil {
 				t.Fatalf("got nil error; want %q", tc.wantErr)
 			}
@@ -154,14 +157,6 @@ func TestPsyringe_Test_deterministic_output(t *testing.T) {
 		wantErr string
 	}{
 		{
-			desc: "missing ctors before cycles",
-			ctors: []interface{}{
-				func(B) C { return nil }, // No ctor for B (Want).
-				func(A) A { return nil }, // A is a self-cycle.
-			},
-			wantErr: "unable to satisfy constructor func(psyringe.B) psyringe.C: unable to satisfy param 0: no constructor or value for psyringe.B",
-		},
-		{
 			desc: "missing ctors sorted",
 			ctors: []interface{}{
 				func(int) A { return nil }, // No ctor for int (want)
@@ -169,14 +164,6 @@ func TestPsyringe_Test_deterministic_output(t *testing.T) {
 
 			},
 			wantErr: "unable to satisfy constructor func(int) psyringe.A: unable to satisfy param 0: no constructor or value for int",
-		},
-		{
-			desc: "cycles sorted",
-			ctors: []interface{}{
-				func(A) A { return nil },
-				func(B) B { return nil },
-			},
-			wantErr: "dependency cycle: psyringe.A: depends on psyringe.A",
 		},
 	}
 

@@ -66,6 +66,7 @@ type Psyringe struct {
 	scope          string
 	injectionTypes injectionTypes
 	Hooks          Hooks
+	allowAddCycle  bool
 }
 
 // New creates a new Psyringe, and adds the provided constructors and values to
@@ -389,7 +390,7 @@ func (p *Psyringe) registerInjectionType(t reflect.Type, it *injectionType) erro
 	if err := p.injectionTypes.Add(t, it); err != nil {
 		return err
 	}
-	if it.Ctor == nil {
+	if p.allowAddCycle || it.Ctor == nil {
 		return nil
 	}
 	return errors.Wrapf(p.detectCycle(seen{}, it.Ctor),
