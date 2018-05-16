@@ -7,6 +7,7 @@ import (
 	"go/parser"
 	"go/printer"
 	"go/token"
+	"io"
 	"log"
 	"os"
 	"path"
@@ -27,21 +28,24 @@ func main() {
 	}
 
 	log.Printf("Package name: %s", pkg.Name)
-
-	for _, f := range pkg.Package.Files {
-		for _, d := range f.Decls {
-			funcDecl, ok := d.(*ast.FuncDecl)
-			if !ok {
-				continue
-			}
-			ctor, ok := pkg.makeCtorCode(funcDecl)
-			if !ok {
-				continue
-			}
-
-			fmt.Printf("%s -> %s\n", ctor.FuncName, ctor.InjectionTypeName)
-		}
+	for _, ctor := range pkg.Ctors() {
+		fmt.Printf("%s -> %s; deps: %s\n", ctor.FuncName,
+			ctor.InjectionTypeName,
+			strings.Join(ctor.InTypeStrings(), ", "))
 	}
+
+	if len(os.Args) == 2 {
+		return
+	}
+
+	typ := os.Args[2]
+	ctor, ok := pkg.CtorByInjectionType(typ)
+	if !ok {
+		log.Fatalf("Injection type %q not found.", typ)
+	}
+	fmt.Println()
+	fmt.Printf("Get%s() {\n%s\n}", typ, ctor.GetFunc())
+
 }
 
 // Pkg bundles an *ast.Package with a *token.FileSet.
@@ -75,6 +79,31 @@ func newPkg(importPath string) (*Pkg, error) {
 	}, nil
 }
 
+// FuncDecls returns all the func declarations in the package.
+func (p *Pkg) FuncDecls() []*ast.FuncDecl {
+	var out []*ast.FuncDecl
+	for _, f := range p.Package.Files {
+		for _, d := range f.Decls {
+			if funcDecl, ok := d.(*ast.FuncDecl); ok {
+				out = append(out, funcDecl)
+			}
+		}
+	}
+	return out
+}
+
+// Ctors returns all the declared psyringe constructors in the package.
+func (p *Pkg) Ctors() []*CtorCode {
+	var out []*CtorCode
+	for _, f := range p.FuncDecls() {
+		if ctor, ok := p.makeCtorCode(f); ok {
+			out = append(out, ctor)
+		}
+
+	}
+	return out
+}
+
 // CtorCode is the code representing a constructor in the graph.
 type CtorCode struct {
 	FuncName          string
@@ -82,6 +111,69 @@ type CtorCode struct {
 	InjectionTypeName string
 	HasErr            bool
 	Inputs            []*ast.Field
+	Pkg               *Pkg
+}
+
+// InTypeStrings returns a string representation of each input type in order.
+func (c *CtorCode) InTypeStrings() []string {
+	out := make([]string, len(c.Inputs))
+	for i, f := range c.Inputs {
+		out[i] = c.Pkg.exprToString(f.Type)
+	}
+	return out
+}
+
+// GetFunc returns code for a new function that returns the same injection type
+// as this ctor with minimal inputs, in terms of other constructors in p.
+func (c *CtorCode) GetFunc() string {
+	unresolvedInputs := map[string]struct{}{}
+	resolvedInputs := map[string]*CtorCall{}
+	for _, in := range c.InTypeStrings() {
+		if _, ok := resolvedInputs[in]; ok {
+			continue
+		}
+		unresolvedInputs[in] = struct{}{}
+		if ctor, ok := c.Pkg.CtorByInjectionType(in); ok {
+			resolvedInputs[in] = &CtorCall{CtorCode: ctor}
+			delete(unresolvedInputs, in)
+		}
+	}
+
+	out := &bytes.Buffer{}
+	for typ, ctorCall := range resolvedInputs {
+		fmt.Fprintf(out, "%s, err :=", typ)
+		ctorCall.Fprint(out)
+	}
+
+	return out.String()
+}
+
+// CtorCall is a call of a constructor.
+type CtorCall struct {
+	CtorCode   *CtorCode
+	ArgsByType map[string]string
+}
+
+// Fprint writes this ctor call to the writer.
+func (c *CtorCall) Fprint(w io.Writer) {
+	fmt.Fprint(w, c.CtorCode.FuncName)
+	fmt.Fprint(w, "(")
+	for _, a := range c.CtorCode.InTypeStrings() {
+		fmt.Fprint(w, c.ArgsByType[a])
+		fmt.Fprint(w, ",")
+	}
+	fmt.Fprint(w, ")")
+}
+
+// CtorByInjectionType returns the ctor for the injectiontype t and true, or nil
+// and false if there isn't one.
+func (p *Pkg) CtorByInjectionType(t string) (*CtorCode, bool) {
+	for _, ctor := range p.Ctors() {
+		if ctor.InjectionTypeName == t {
+			return ctor, true
+		}
+	}
+	return nil, false
 }
 
 func (p *Pkg) newCtorCode(name string, inputs *ast.FieldList, outType ast.Expr, hasErr bool) *CtorCode {
@@ -91,13 +183,19 @@ func (p *Pkg) newCtorCode(name string, inputs *ast.FieldList, outType ast.Expr, 
 		InjectionTypeName: p.exprToString(outType),
 		HasErr:            hasErr,
 		Inputs:            inputs.List,
+		Pkg:               p,
 	}
 }
 
 func (p *Pkg) exprToString(expr ast.Expr) string {
 	var buf bytes.Buffer
-	printer.Fprint(&buf, p.FileSet, expr)
+	p.Fprint(&buf, expr)
 	return buf.String()
+}
+
+// Fprint writes the provided node n to the writer.
+func (p *Pkg) Fprint(w io.Writer, n interface{}) {
+	printer.Fprint(w, p.FileSet, n)
 }
 
 func (p *Pkg) makeCtorCode(f *ast.FuncDecl) (*CtorCode, bool) {
